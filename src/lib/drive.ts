@@ -1,9 +1,9 @@
 import type { FinanceData } from './types';
 import { mergeFinanceData } from './finance';
 import { serializeBackup, validateBackup } from './storage';
+import { APP_ID, LEGACY_APP_ID, DEVICE_STORAGE_KEY, LEGACY_DEVICE_STORAGE_KEY } from './identity';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
-const DEVICE_STORAGE_KEY = 'reserva.drive.deviceId';
 const API_ROOT = 'https://www.googleapis.com/drive/v3';
 const MAX_SNAPSHOT_BYTES = 25 * 1024 * 1024;
 
@@ -56,7 +56,7 @@ function loadGoogle(): Promise<GoogleOauth> {
       reject(new Error('A conexão com o Google Drive precisa de um navegador.'));
       return;
     }
-    const scriptId = 'reserva-google-identity';
+    const scriptId = `${APP_ID}-google-identity`;
     const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
     const script = existing ?? document.createElement('script');
     let settled = false;
@@ -257,6 +257,11 @@ function deviceId(): string {
   try {
     const existing = localStorage.getItem(DEVICE_STORAGE_KEY);
     if (existing && /^[a-zA-Z0-9_-]{1,100}$/.test(existing)) return existing;
+    const legacy = localStorage.getItem(LEGACY_DEVICE_STORAGE_KEY);
+    if (legacy && /^[a-zA-Z0-9_-]{1,100}$/.test(legacy)) {
+      localStorage.setItem(DEVICE_STORAGE_KEY, legacy);
+      return legacy;
+    }
     const created = crypto.randomUUID();
     localStorage.setItem(DEVICE_STORAGE_KEY, created);
     return created;
@@ -269,7 +274,7 @@ function snapshotFile(value: unknown): SnapshotFile {
   const file = value as Partial<SnapshotFile> | null;
   if (!file || typeof file.id !== 'string' || !file.id || typeof file.name !== 'string'
       || file.mimeType !== 'application/json' || typeof file.modifiedTime !== 'string'
-      || !Number.isFinite(Date.parse(file.modifiedTime)) || file.appProperties?.app !== 'reserva'
+      || !Number.isFinite(Date.parse(file.modifiedTime)) || !file.appProperties || ![APP_ID, LEGACY_APP_ID].includes(file.appProperties.app)
       || typeof file.appProperties.deviceId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(file.appProperties.deviceId)) {
     throw new Error('Um backup do aplicativo no Drive tem metadados inválidos. Nenhum dado novo foi enviado.');
   }
@@ -289,7 +294,7 @@ async function latestSnapshots(): Promise<SnapshotFile[]> {
   do {
     const query = new URLSearchParams({
       spaces: 'appDataFolder',
-      q: "trashed = false and appProperties has { key='app' and value='reserva' }",
+      q: `trashed = false and (appProperties has { key='app' and value='${APP_ID}' } or appProperties has { key='app' and value='${LEGACY_APP_ID}' })`,
       fields: 'nextPageToken,incompleteSearch,files(id,name,mimeType,size,modifiedTime,appProperties)',
       pageSize: '1000',
     });
@@ -334,12 +339,12 @@ async function syncSnapshots(data: FinanceData): Promise<{ data: FinanceData; sy
   for (const remote of remoteData) merged = mergeFinanceData(merged, remote);
   const payload = serializeBackup(merged);
   if (new Blob([payload]).size > MAX_SNAPSHOT_BYTES) throw new Error('Os dados superam 25 MB. Exporte um backup e reduza o histórico antes de sincronizar.');
-  const boundary = `reserva_${crypto.randomUUID().replaceAll('-', '')}`;
+  const boundary = `${APP_ID}_${crypto.randomUUID().replaceAll('-', '')}`;
   const metadata = {
-    name: `reserva-${new Date().toISOString().replaceAll(':', '-')}-${crypto.randomUUID()}.json`,
+    name: `${APP_ID}-${new Date().toISOString().replaceAll(':', '-')}-${crypto.randomUUID()}.json`,
     mimeType: 'application/json',
     parents: ['appDataFolder'],
-    appProperties: { app: 'reserva', version: '1', deviceId: ownDeviceId },
+    appProperties: { app: APP_ID, version: '1', deviceId: ownDeviceId },
   };
   const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${payload}\r\n--${boundary}--\r\n`;
   // Every sync creates a fresh file. Never update or delete a remote snapshot.
@@ -373,7 +378,7 @@ export async function syncDrive(data: FinanceData): Promise<{ data: FinanceData;
       let lockTimedOut = false;
       const timer = setTimeout(() => { lockTimedOut = true; controller.abort(); }, 30_000);
       try {
-        return await navigator.locks.request('reserva.drive.sync', { signal: controller.signal }, () => {
+        return await navigator.locks.request(`${APP_ID}.drive.sync`, { signal: controller.signal }, () => {
           clearTimeout(timer);
           return sync();
         });

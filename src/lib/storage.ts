@@ -1,17 +1,24 @@
 import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth } from './finance';
+import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import type { BudgetSnapshot, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 let financeStore: ReturnType<typeof createStore> | undefined;
+let legacyFinanceStore: ReturnType<typeof createStore> | undefined;
 function store() {
   if (typeof indexedDB === 'undefined') throw new Error('Este navegador não disponibilizou o armazenamento local. Exporte um backup antes de fechar.');
-  return financeStore ??= createStore('reserva-financas', 'dados');
+  return financeStore ??= createStore(DATABASE_NAME, 'dados');
 }
 
 export async function loadData(): Promise<FinanceData | null> {
   const data = await get<unknown>(DATA_KEY, store());
-  return data === undefined ? null : validateBackup(data);
+  if (data !== undefined) return validateBackup(data);
+  const legacy = await get<unknown>(DATA_KEY, legacyFinanceStore ??= createStore(LEGACY_DATABASE_NAME, 'dados'));
+  if (legacy === undefined) return null;
+  const migrated = validateBackup(legacy);
+  await set(DATA_KEY, migrated, store());
+  return migrated;
 }
 
 export async function saveData(data: FinanceData): Promise<void> {

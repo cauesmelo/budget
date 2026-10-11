@@ -1,6 +1,6 @@
-# Reserva
+# Budget
 
-Aplicativo de finanças pessoais em português, com importação de extratos Itaú e planejamento de reservas. Roda no navegador, salva os dados localmente e oferece sincronização opcional pelo Google Drive, dentro das quotas gratuitas para uso pessoal.
+Budget é um aplicativo de finanças pessoais em português, com importação de extratos Itaú e planejamento de reservas. Roda no navegador, salva os dados localmente e oferece sincronização opcional pelo Google Drive, dentro das quotas gratuitas para uso pessoal.
 
 ## Rodar em qualquer computador
 
@@ -50,6 +50,8 @@ Em outro computador, use o mesmo ID OAuth e **sincronize antes de começar**. A 
 O código não inclui os arquivos fornecidos, lançamentos reais ou backups. O `.gitignore` exclui planilhas, extratos e as pastas `data`, `private` e `backups`. O backup JSON contém seus dados financeiros; salve-o fora do repositório. Credenciais OAuth e tokens não são incluídos no backup nem nos arquivos enviados ao Drive.
 
 Os dados locais pertencem ao perfil do navegador e à origem/porta do site. Outro navegador ou uma porta diferente terá outro armazenamento. Limpar os dados do navegador ou usar uma janela anônima pode apagar a cópia local. Antes disso, exporte um backup ou sincronize.
+
+A atualização do nome migra automaticamente os dados locais da versão anterior e continua reconhecendo seus backups e as cópias anteriores no Drive. O ID do dispositivo também é preservado. As novas cópias exportadas usam o nome `budget-backup-AAAA-MM-DD.json`.
 
 Você pode salvar o código no seu GitHub pessoal e cloná-lo em outros computadores. Nenhum repositório remoto é criado nem enviado automaticamente. Para usar uma hospedagem estática, publique somente o conteúdo de `dist`, sem extratos e sem dados pessoais; cadastre a origem HTTPS correspondente no cliente OAuth. O projeto não precisa de hospedagem para funcionar localmente.
 

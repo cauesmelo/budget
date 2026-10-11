@@ -1,6 +1,6 @@
 # Dados na nuvem, sem servidor próprio
 
-O Reserva funciona no navegador e salva os dados localmente em IndexedDB. A sincronização opcional salva backups JSON na pasta privada do aplicativo no Google Drive. Assim, o mesmo projeto pode ser clonado em vários computadores, usando a mesma conta Google e a mesma configuração OAuth.
+O Budget funciona no navegador e salva os dados localmente em IndexedDB. A sincronização opcional salva backups JSON na pasta privada do aplicativo no Google Drive. Assim, o mesmo projeto pode ser clonado em vários computadores, usando a mesma conta Google e a mesma configuração OAuth.
 
 A integração já está implementada. Para habilitá-la, você precisa criar o Client ID na sua conta Google; o projeto não contém credenciais de terceiros. A existência da integração no código não significa que uma conta já tenha sido configurada ou que uma sincronização real tenha sido realizada.
 
@@ -16,13 +16,13 @@ Informações verificadas em fontes oficiais em **11 de outubro de 2026**. A rec
 | Supabase Free | Banco PostgreSQL, autenticação, consultas e regras de acesso | Criar projeto, esquema e regras; plano gratuito pode pausar por pouca atividade | Melhor se o produto crescer para vários usuários; desnecessário nesta versão |
 | Somente armazenamento local + backup JSON | Funciona sem configurar serviço externo | Você precisa transportar os backups entre computadores e conservá-los | Disponível desde o primeiro uso |
 
-Google Docs é um documento de texto. Para usar uma planilha como base de dados, a opção seria **Google Sheets**. Para o modelo do Reserva, um JSON no Drive preserva lançamentos, categorias, planejamento e configurações sem converter toda alteração em manipulação de células.
+Google Docs é um documento de texto. Para usar uma planilha como base de dados, a opção seria **Google Sheets**. Para o modelo do Budget, um JSON no Drive preserva lançamentos, categorias, planejamento e configurações sem converter toda alteração em manipulação de células.
 
 ## Configurar o Google Drive
 
 Você faz esta configuração uma vez na conta que será usada para guardar os dados. Não é necessário contratar hospedagem nem usar uma conta de serviço.
 
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie um projeto, por exemplo, `Reserva pessoal`.
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie um projeto, por exemplo, `Budget pessoal`.
 2. Em **APIs e serviços → Biblioteca**, habilite a **Google Drive API**.
 3. Abra **Google Auth Platform**. Configure o nome do aplicativo, email de suporte e email de contato. Para uma conta pessoal, escolha a audiência **External**.
 4. Em **Data Access**, adicione somente o escopo `https://www.googleapis.com/auth/drive.appdata`. Esse escopo é classificado como **não sensível** e permite guardar dados na pasta própria do aplicativo; não concede acesso a todos os documentos do seu Drive. [Escopos do Drive](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
@@ -34,9 +34,9 @@ Você faz esta configuração uma vez na conta que será usada para guardar os d
    ```
 
    Use o endereço `http://localhost:5173` para abrir o aplicativo. A porta de desenvolvimento é fixa. As origens não levam caminhos, barra final nem o nome do repositório. Se alterar a porta no projeto, cadastre a nova origem. A configuração oficial pede tanto a origem localhost quanto a origem com a porta. Domínios externos exigem HTTPS; localhost tem uma exceção para desenvolvimento. [Configuração do cliente](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid), [regras de origem](https://developers.google.com/identity/protocols/oauth2/javascript-implicit-flow).
-6. Copie o **Client ID**, terminado em `.apps.googleusercontent.com`, e informe-o nas configurações de nuvem do Reserva. Não copie o Client Secret. O fluxo usado aqui é de navegador e não precisa desse segredo. [Client ID e operações de servidor](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid).
+6. Copie o **Client ID**, terminado em `.apps.googleusercontent.com`, e informe-o nas configurações de nuvem do Budget. Não copie o Client Secret. O fluxo usado aqui é de navegador e não precisa desse segredo. [Client ID e operações de servidor](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid).
 7. Se o aplicativo estiver em **Testing**, adicione o email da sua conta em **Test users**. Esse modo admite até 100 test users e o consentimento expira após sete dias, exigindo uma nova autorização. Para uso contínuo pessoal, você pode mudar a audiência para **In production**; a limitação semanal de Testing deixa de se aplicar. [Audiência e publicação](https://support.google.com/cloud/answer/15549945?hl=en).
-8. No Reserva, clique em **Conectar**, escolha sua conta e autorize a pasta do aplicativo. Depois clique em **Sincronizar**. Em outro computador, configure o mesmo Client ID, conecte a mesma conta e sincronize para recuperar os dados.
+8. No Budget, clique em **Conectar**, escolha sua conta e autorize a pasta do aplicativo. Depois clique em **Sincronizar**. Em outro computador, configure o mesmo Client ID, conecte a mesma conta e sincronize para recuperar os dados.
 
 O Google prevê uma exceção à submissão para revisão quando o aplicativo é usado somente por você ou por poucas pessoas conhecidas. Uma distribuição pública pode precisar de verificação. Exibir nome/logo verificados no consentimento envolve a verificação da marca; não há garantia de ausência de avisos em toda configuração. O escopo não sensível utilizado evita pedir a revisão adicional de acesso a todo o Drive. [Verificação da marca e exceção para uso pessoal](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification).
 
@@ -44,7 +44,7 @@ Não troque de projeto OAuth para usar cada computador: reutilize o Client ID da
 
 ## Como a sincronização funciona
 
-Ao clicar em sincronizar, o Reserva:
+Ao clicar em sincronizar, o Budget:
 
 1. Identifica este navegador por um ID aleatório, persistido localmente. O ID não contém nome, email nem identificação bancária.
 2. Lista os backups do aplicativo no Drive, incluindo todas as páginas da listagem.
@@ -95,7 +95,7 @@ O uso padrão é sem custo adicional. As quotas atuais incluem 300 requests de l
 
 O Microsoft Graph oferece uma pasta do aplicativo em `Apps/{nome do aplicativo}`, com o escopo `Files.ReadWrite.AppFolder`, usando o espaço disponível da conta. Para contas Microsoft pessoais, a documentação do endpoint de pastas especiais indica esse escopo como o mínimo para a pasta do aplicativo. O usuário pode alterar/remover arquivos dessa pasta. [Pasta do aplicativo](https://learn.microsoft.com/en-us/graph/onedrive-sharepoint-appfolder), [permissões para contas pessoais](https://learn.microsoft.com/en-us/graph/api/drive-get-specialfolder?view=graph-rest-1.0).
 
-Uma integração de navegador requer registrar a aplicação no Microsoft Entra e usar código de autorização com **PKCE**, sem Client Secret no frontend. Em aplicações SPA, os refresh tokens duram 24 horas; a aplicação precisa renovar a autorização depois disso. A conta Office existente pode tornar essa opção atraente, mas a integração Microsoft Graph não está implementada no Reserva. [Fluxo SPA e PKCE](https://learn.microsoft.com/en-us/entra/identity-platform/reference-third-party-cookies-spas), [validade dos tokens](https://learn.microsoft.com/en-us/entra/identity-platform/refresh-tokens).
+Uma integração de navegador requer registrar a aplicação no Microsoft Entra e usar código de autorização com **PKCE**, sem Client Secret no frontend. Em aplicações SPA, os refresh tokens duram 24 horas; a aplicação precisa renovar a autorização depois disso. A conta Office existente pode tornar essa opção atraente, mas a integração Microsoft Graph não está implementada no Budget. [Fluxo SPA e PKCE](https://learn.microsoft.com/en-us/entra/identity-platform/reference-third-party-cookies-spas), [validade dos tokens](https://learn.microsoft.com/en-us/entra/identity-platform/refresh-tokens).
 
 ### Supabase Free
 
@@ -123,4 +123,4 @@ Se futuramente configurar uma origem HTTPS, cadastre **a origem**, por exemplo `
 | Falha de internet ou timeout | Seus dados locais continuam salvos. Reconecte/sincronize quando a internet voltar |
 | Nenhum dado aparece em outro computador | Use a mesma conta Google e o mesmo Client ID; confirme uma sincronização concluída no primeiro computador |
 | Backup remoto inválido | O programa interrompe o envio para não propagar erro. Exporte os dados locais e investigue o backup antes de restaurar |
-| Falta de espaço na conta Google | Libere espaço ou use os backups locais; o Reserva não contrata armazenamento nem remove arquivos automaticamente |
+| Falta de espaço na conta Google | Libere espaço ou use os backups locais; o Budget não contrata armazenamento nem remove arquivos automaticamente |

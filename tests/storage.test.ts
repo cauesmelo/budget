@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyData } from '../src/lib/finance';
+import { DATABASE_NAME, LEGACY_DATABASE_NAME } from '../src/lib/identity';
 import { loadData, saveData, serializeBackup, validateBackup } from '../src/lib/storage';
 import type { FinanceData } from '../src/lib/types';
 
 const memory = vi.hoisted(() => new Map<string, unknown>());
 vi.mock('idb-keyval', () => ({
-  createStore: vi.fn(() => ({})),
-  get: vi.fn(async (key: string) => memory.get(key)),
-  set: vi.fn(async (key: string, value: unknown) => { memory.set(key, structuredClone(value)); }),
+  createStore: vi.fn((databaseName: string) => ({ databaseName })),
+  get: vi.fn(async (key: string, store: { databaseName: string }) => memory.get(`${store.databaseName}/${key}`)),
+  set: vi.fn(async (key: string, value: unknown, store: { databaseName: string }) => { memory.set(`${store.databaseName}/${key}`, structuredClone(value)); }),
 }));
 
 const NOW = new Date('2026-10-11T15:00:00.000Z');
@@ -81,6 +82,34 @@ describe('validação de backup', () => {
 });
 
 describe('persistência local', () => {
+  it('migra todo o estado anterior sem apagar a cópia original', async () => {
+    const data = fixture();
+    data.transactions[0].deletedAt = NOW.toISOString();
+    data.settings.googleClientId = 'existing-client-id';
+    memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, structuredClone(data));
+    expect(await loadData()).toEqual(data);
+    expect(memory.get(`${DATABASE_NAME}/finance-data-v1`)).toEqual(data);
+    expect(memory.get(`${LEGACY_DATABASE_NAME}/finance-data-v1`)).toEqual(data);
+  });
+
+  it('prioriza os dados atuais e não repete a migração', async () => {
+    memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, fixture());
+    const current = fixture();
+    current.transactions[0].category = 'Categoria atualizada';
+    await saveData(current);
+    expect(await loadData()).toEqual(current);
+    expect(memory.get(`${DATABASE_NAME}/finance-data-v1`)).toEqual(current);
+  });
+
+  it('recusa dados anteriores inválidos antes de gravar no novo banco', async () => {
+    const invalid = fixture();
+    invalid.transactions[0].amountCents = Infinity;
+    memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, invalid);
+    await expect(loadData()).rejects.toThrow();
+    expect(memory.has(`${DATABASE_NAME}/finance-data-v1`)).toBe(false);
+    expect(memory.get(`${LEGACY_DATABASE_NAME}/finance-data-v1`)).toEqual(invalid);
+  });
+
   it('carrega instalação vazia e salva/carrega todo o estado incluindo tombstone', async () => {
     expect(await loadData()).toBeNull();
     const data = fixture();

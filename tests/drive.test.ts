@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyData } from '../src/lib/finance';
+import { APP_ID, LEGACY_APP_ID, DEVICE_STORAGE_KEY, LEGACY_DEVICE_STORAGE_KEY } from '../src/lib/identity';
 import type { FinanceData, Transaction } from '../src/lib/types';
 
 const CLIENT_ID = '123-example.apps.googleusercontent.com';
@@ -22,8 +23,8 @@ let revoke: ReturnType<typeof vi.fn>;
 function response(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 }
-function metadata(id: string, deviceId: string, modifiedTime = NOW) {
-  return { id, name: `${id}.json`, mimeType: 'application/json', size: '1000', modifiedTime, appProperties: { app: 'reserva', version: '1', deviceId } };
+function metadata(id: string, deviceId: string, modifiedTime = NOW, app = APP_ID) {
+  return { id, name: `${id}.json`, mimeType: 'application/json', size: '1000', modifiedTime, appProperties: { app, version: '1', deviceId } };
 }
 function transaction(id: string, extra: Partial<Transaction> = {}): Transaction {
   return {
@@ -119,7 +120,7 @@ describe('autorização Google Drive', () => {
 describe('snapshots append-only', () => {
   it('pagina, escolhe o último de cada dispositivo e reúne dados antes de criar um arquivo', async () => {
     await drive.connectDrive(CLIENT_ID);
-    stored.set('reserva.drive.deviceId', 'local-device');
+    stored.set(DEVICE_STORAGE_KEY, 'local-device');
     const local = data(transaction('local'), transaction('shared'));
     const remoteA = data(transaction('device-a'), transaction('shared', { category: 'Apagado', deletedAt: '2026-10-12T20:00:00.000Z' }));
     const remoteB = data(transaction('device-b'));
@@ -129,9 +130,10 @@ describe('snapshots append-only', () => {
       expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer in-memory-token');
       if (request.pathname === '/drive/v3/files') {
         expect(request.searchParams.get('spaces')).toBe('appDataFolder');
-        expect(request.searchParams.get('q')).toContain("value='reserva'");
-        if (!request.searchParams.has('pageToken')) return response({ files: [metadata('old-a', 'a', '2026-10-10T20:00:00.000Z'), metadata('new-a', 'a')], nextPageToken: 'page-2' });
-        return response({ files: [metadata('aaa-b', 'b'), metadata('zzz-b', 'b')] });
+        expect(request.searchParams.get('q')).toContain(`value='${APP_ID}'`);
+        expect(request.searchParams.get('q')).toContain(`value='${LEGACY_APP_ID}'`);
+        if (!request.searchParams.has('pageToken')) return response({ files: [metadata('old-a', 'a', '2026-10-10T20:00:00.000Z', LEGACY_APP_ID), metadata('new-a', 'a')], nextPageToken: 'page-2' });
+        return response({ files: [metadata('aaa-b', 'b'), metadata('zzz-b', 'b', NOW, LEGACY_APP_ID)] });
       }
       if (request.searchParams.get('alt') === 'media') {
         downloaded.push(request.pathname);
@@ -141,6 +143,7 @@ describe('snapshots append-only', () => {
       const body = String(options?.body);
       expect(body).toContain('"parents":["appDataFolder"]');
       expect(body).toContain('"deviceId":"local-device"');
+      expect(body).toContain('"app":"budget"');
       return response({ id: 'created', modifiedTime: NOW });
     });
     const result = await drive.syncDrive(local);
@@ -169,16 +172,40 @@ describe('snapshots append-only', () => {
     fetchMock.mockImplementation(async (_url: string, options?: RequestInit) => options?.method === 'POST'
       ? response({ id: crypto.randomUUID(), modifiedTime: NOW }) : response({ files: [] }));
     await drive.syncDrive(data());
-    const id = stored.get('reserva.drive.deviceId');
+    const id = stored.get(DEVICE_STORAGE_KEY);
+    expect(id).toBeTruthy();
     await drive.syncDrive(data());
-    expect(stored.get('reserva.drive.deviceId')).toBe(id);
+    expect(stored.get(DEVICE_STORAGE_KEY)).toBe(id);
     const uploads = fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST');
     const extractMetadata = (body: string) => JSON.parse(body.split('Content-Type: application/json; charset=UTF-8\r\n\r\n')[1].split('\r\n--')[0]);
     const first = extractMetadata(uploads[0][1].body);
     const second = extractMetadata(uploads[1][1].body);
     expect(first.name).not.toBe(second.name);
+    expect(first.name).toMatch(/^budget-/);
+    expect(first.appProperties.app).toBe(APP_ID);
     expect(first.appProperties.deviceId).toBe(second.appProperties.deviceId);
     expect([...stored.values()]).not.toContain('in-memory-token');
+  });
+
+  it('preserva o ID anterior e reconhece backups antigos ao publicar com o novo nome', async () => {
+    await drive.connectDrive(CLIENT_ID);
+    stored.set(LEGACY_DEVICE_STORAGE_KEY, 'existing-device');
+    const remote = data(transaction('previous-purchase'));
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      const request = new URL(url);
+      if (options?.method === 'POST') {
+        expect(String(options.body)).toContain('"app":"budget"');
+        expect(String(options.body)).toContain('"deviceId":"existing-device"');
+        return response({ id: 'new-budget-snapshot', modifiedTime: NOW });
+      }
+      if (request.searchParams.get('alt') === 'media') return response(remote);
+      return response({ files: [metadata('previous-snapshot', 'existing-device', NOW, LEGACY_APP_ID)] });
+    });
+    const result = await drive.syncDrive(data(transaction('new-purchase')));
+    expect(result.data.transactions.map(entry => entry.id)).toEqual(['new-purchase', 'previous-purchase']);
+    expect(uploadedData().transactions).toEqual(result.data.transactions);
+    expect(stored.get(DEVICE_STORAGE_KEY)).toBe('existing-device');
+    expect(stored.get(LEGACY_DEVICE_STORAGE_KEY)).toBe('existing-device');
   });
 
   it('não continua uma sync enfileirada se a conexão mudou enquanto aguardava outra aba', async () => {

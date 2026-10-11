@@ -7,6 +7,7 @@ dist/
 data/
 private/
 backups/
+budget-backup-*.json
 reserva-backup-*.json
 *.xlsx
 *.xls
