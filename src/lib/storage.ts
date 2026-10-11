@@ -1,5 +1,5 @@
 import { createStore, get, set } from 'idb-keyval';
-import { addMonths, isValidDate, isValidMonth } from './finance';
+import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
 import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
@@ -137,6 +137,7 @@ function planItem(value: unknown, path: string): PlanItem {
   if (endMonth && endMonth < startMonth) fail(path, 'has an end month before its start month');
   return {
     ...recordBase(source, path), name: string(source.name, `${path}.name`, true, 2_000),
+    ...(source.sourcePlanId !== undefined ? { sourcePlanId: string(source.sourcePlanId, `${path}.sourcePlanId`, false, 1_000) } : {}),
     category: string(source.category, `${path}.category`, true, 500),
     kind: oneOf<PlanItem['kind']>(source.kind, ['income', 'expense', 'contribution'], `${path}.kind`),
     defaultAmountCents: integer(source.defaultAmountCents, `${path}.defaultAmountCents`, 0),
@@ -245,6 +246,8 @@ export function validateBackup(payload: unknown): FinanceData {
     settings: settings(source.settings),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
+  try { parsed.planItems = reconcilePlanSegments(parsed.planItems); }
+  catch (error) { fail('planItems', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid segment'); }
   try { return normalizeCategoryData(parsed, source.categories === undefined); }
   catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid category'); }
 }

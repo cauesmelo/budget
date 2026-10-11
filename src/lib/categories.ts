@@ -1,4 +1,4 @@
-import type { Category, FinanceData } from './types';
+import type { Category, FinanceData, PlanItem } from './types';
 
 // Categories discovered in older backups must not replace a current edit.
 const LEGACY_CLOCK = '1970-01-01T00:00:00.000Z';
@@ -166,5 +166,131 @@ export function restoreCategory(data: FinanceData, id: string, now = new Date())
   delete category.archivedAt;
   category.updatedAt = editTime(now);
   next.updatedAt = category.updatedAt;
+  return next;
+}
+
+export interface FutureCategoryConfiguration {
+  fromMonth: string;
+  activeNames: string[];
+  assignments: Record<string, string>;
+}
+
+function previousMonth(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const number = Number(month.slice(5));
+  if (number > 1) return `${month.slice(0, 4)}-${String(number - 1).padStart(2, '0')}`;
+  if (year === 1) throw new Error('The category boundary is outside the supported range.');
+  return `${String(year - 1).padStart(4, '0')}-12`;
+}
+
+function futurePlanId(id: string, month: string): string {
+  let hash = 14695981039346656037n;
+  for (const character of JSON.stringify([id, month])) {
+    hash ^= BigInt(character.codePointAt(0)!);
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return `future-plan-${hash.toString(16).padStart(16, '0')}`;
+}
+
+/** Restricts future choices and assignments without renaming historical categories. */
+export function configureFutureCategories(data: FinanceData, configuration: FutureCategoryConfiguration, now = new Date()): FinanceData {
+  const { fromMonth } = configuration;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(fromMonth) || Number(fromMonth.slice(0, 4)) < 1) throw new Error('Invalid category boundary. Use YYYY-MM.');
+  const updatedAt = editTime(now);
+  const activeNames = configuration.activeNames.map(cleanName);
+  const activeKeys = new Set(activeNames.map(categoryNameKey));
+  if (activeKeys.size !== activeNames.length) throw new Error('Future categories must have unique names.');
+  const active = new Set(activeNames);
+  const catalog = lookup(data.categories);
+  for (const name of activeNames) {
+    const existing = catalog.get(categoryNameKey(name));
+    if (existing && existing.name !== name) throw new Error(`The category ${name} conflicts with an existing name or alias. Renaming it would change history.`);
+  }
+  const assignments = new Map<string, string>();
+  for (const [source, target] of Object.entries(configuration.assignments)) {
+    const key = categoryNameKey(cleanName(source));
+    if (target !== '' && !active.has(target)) throw new Error('Category assignments must use an exact future category name or an empty value.');
+    if (assignments.has(key) && assignments.get(key) !== target) throw new Error('Category assignments contain conflicting source names.');
+    assignments.set(key, target);
+  }
+  const futureName = (name: string): string => active.has(name) ? name : assignments.get(categoryNameKey(name)) ?? '';
+  const next = structuredClone(data);
+  let changed = false;
+  for (const category of next.categories) {
+    if (active.has(category.name)) {
+      if (category.archivedAt) {
+        delete category.archivedAt;
+        category.updatedAt = updatedAt;
+        changed = true;
+      }
+    } else if (!category.archivedAt) {
+      category.archivedAt = category.updatedAt = updatedAt;
+      changed = true;
+    }
+  }
+  for (const name of activeNames) if (!catalog.has(categoryNameKey(name))) {
+    next.categories.push({ id: categoryId(name), name, updatedAt });
+    changed = true;
+  }
+  for (const item of next.transactions) {
+    if (item.deletedAt || item.month < fromMonth) continue;
+    const category = futureName(item.category);
+    if (category !== item.category) {
+      item.category = category;
+      item.updatedAt = updatedAt;
+      changed = true;
+    }
+  }
+  const futurePieces: PlanItem[] = [];
+  const planIds = new Set(next.planItems.map(item => item.id));
+  for (const item of next.planItems) {
+    if (item.deletedAt || (item.endMonth && item.endMonth < fromMonth)) continue;
+    const category = futureName(item.category);
+    if (category === item.category) continue;
+    if (item.startMonth >= fromMonth) {
+      item.category = category;
+      item.updatedAt = updatedAt;
+    } else {
+      const id = futurePlanId(item.id, fromMonth);
+      if (planIds.has(id)) throw new Error('A future planning record with this identity already exists.');
+      const futurePiece: PlanItem = { ...item, id, sourcePlanId: item.id, category, startMonth: fromMonth, amounts: {}, updatedAt };
+      const historicalAmounts: Record<string, number> = {};
+      for (const [month, amount] of Object.entries(item.amounts)) {
+        if (month < fromMonth) historicalAmounts[month] = amount;
+        else futurePiece.amounts[month] = amount;
+      }
+      item.amounts = historicalAmounts;
+      item.endMonth = previousMonth(fromMonth);
+      item.updatedAt = updatedAt;
+      futurePieces.push(futurePiece);
+      planIds.add(id);
+    }
+    changed = true;
+  }
+  next.planItems.push(...futurePieces);
+  for (const snapshot of next.snapshots) {
+    if (snapshot.month < fromMonth) continue;
+    const amounts: Record<string, number> = {};
+    for (const [name, value] of Object.entries(snapshot.categories)) {
+      const target = futureName(name) || futureName('Uncategorized') || 'Uncategorized';
+      if (target === 'Uncategorized' && !next.categories.some(category => category.name === target)) {
+        const conflict = catalog.get(categoryNameKey(target));
+        if (conflict) throw new Error('The uncategorized snapshot label conflicts with an existing name or alias.');
+        next.categories.push({ id: categoryId(target), name: target, updatedAt, archivedAt: updatedAt });
+        changed = true;
+      }
+      const amount = (Object.hasOwn(amounts, target) ? amounts[target] : 0) + value;
+      if (!Number.isSafeInteger(amount)) throw new Error('The category total exceeds the supported monetary range.');
+      Object.defineProperty(amounts, target, { value: amount, enumerable: true, writable: true, configurable: true });
+    }
+    const originalEntries = Object.entries(snapshot.categories);
+    if (originalEntries.length !== Object.keys(amounts).length || originalEntries.some(([name, value]) => !Object.hasOwn(amounts, name) || amounts[name] !== value)) {
+      snapshot.categories = amounts;
+      snapshot.updatedAt = updatedAt;
+      changed = true;
+    }
+  }
+  if (!changed) return data;
+  next.updatedAt = updatedAt;
   return next;
 }

@@ -215,6 +215,68 @@ function mergeRecords<T extends { id: string; updatedAt: string; deletedAt?: str
   return [...byId.values()].sort((a, b) => lexicalCompare(a.id, b.id));
 }
 
+/** Segment boundaries survive edits from an older device that still has an unsplit plan. */
+export function reconcilePlanSegments(items: PlanItem[]): PlanItem[] {
+  const byId = new Map(items.map(item => [item.id, item]));
+  const roots = new Map<string, string>();
+  for (const item of items) {
+    const chain = new Set<string>();
+    let current: PlanItem | undefined = item;
+    let root = item.id;
+    while (current) {
+      const knownRoot = roots.get(current.id);
+      if (knownRoot !== undefined) { root = knownRoot; break; }
+      if (chain.has(current.id)) throw new Error('Planning segments contain a cycle.');
+      chain.add(current.id);
+      if (current.sourcePlanId === undefined) { root = current.id; break; }
+      if (current.sourcePlanId === current.id) throw new Error('A planning segment cannot reference itself.');
+      const source = byId.get(current.sourcePlanId);
+      if (!source) throw new Error('A planning segment references an unknown source.');
+      current = source;
+    }
+    for (const id of chain) roots.set(id, root);
+  }
+  const families = new Map<string, PlanItem[]>();
+  for (const item of items) {
+    if (item.sourcePlanId !== undefined && item.startMonth <= byId.get(item.sourcePlanId)!.startMonth) throw new Error('A future planning segment must start after its source.');
+    const root = roots.get(item.id)!;
+    const family = families.get(root) ?? [];
+    family.push(item);
+    families.set(root, family);
+  }
+  const boundaries = new Map<string, string>();
+  for (const family of families.values()) {
+    family.sort((left, right) => lexicalCompare(left.startMonth, right.startMonth) || lexicalCompare(left.id, right.id));
+    for (let index = 0; index < family.length - 1; index++) {
+      if (family[index].startMonth === family[index + 1].startMonth) throw new Error('Planning segments contain conflicting boundaries.');
+      boundaries.set(family[index].id, family[index + 1].startMonth);
+    }
+  }
+  return items.map(item => {
+    const boundary = boundaries.get(item.id);
+    if (!boundary) return item;
+    const endMonth = addMonths(boundary, -1);
+    if (item.endMonth && item.endMonth <= endMonth) return item;
+    // Keep amounts outside the effective interval so a stale edit loses no input values.
+    return { ...item, endMonth };
+  });
+}
+
+function mergePlanItems(local: PlanItem[], remote: PlanItem[]): PlanItem[] {
+  const sources = new Map<string, string>();
+  for (const item of [...local, ...remote]) {
+    if (item.sourcePlanId === undefined) continue;
+    const known = sources.get(item.id);
+    if (known && known !== item.sourcePlanId) throw new Error('Planning segments contain conflicting source identities.');
+    sources.set(item.id, item.sourcePlanId);
+  }
+  const merged = mergeRecords(local, remote).map(item => {
+    const sourcePlanId = sources.get(item.id);
+    return sourcePlanId !== undefined && item.sourcePlanId !== sourcePlanId ? { ...item, sourcePlanId } : item;
+  });
+  return reconcilePlanSegments(merged);
+}
+
 export function mergeFinanceData(local: FinanceData, remote: FinanceData): FinanceData {
   if (local.version !== 1 || remote.version !== 1) throw new Error('Unsupported data version.');
   local = normalizeCategoryData(local);
@@ -232,7 +294,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     version: 1 as const,
     categories: mergeCategoryCatalog(local.categories, remote.categories),
     transactions: mergeRecords(local.transactions, remote.transactions),
-    planItems: mergeRecords(local.planItems, remote.planItems),
+    planItems: mergePlanItems(local.planItems, remote.planItems),
     snapshots: mergeRecords(local.snapshots, remote.snapshots),
     imports: mergeRecords(local.imports, remote.imports),
     settings: { ...settings, googleClientId: local.settings.googleClientId },

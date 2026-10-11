@@ -33,6 +33,8 @@ Use **Manage categories**, available in Transactions, Medium-term plan, and Data
 
 Categories already present in your data and imported workbooks are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
+Category changes applied from a selected month preserve earlier classifications. Planning items that cross that boundary are split into historical and future intervals with the same amounts and overrides. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
+
 ## How amounts are handled
 
 - Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.

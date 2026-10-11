@@ -21,6 +21,7 @@ export interface Transaction {
 }
 export interface PlanItem {
   id: string;
+  sourcePlanId?: string;
   name: string;
   category: string;
   kind: 'income' | 'expense' | 'contribution';
