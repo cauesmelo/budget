@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyData } from '../src/lib/finance';
+import { addCategory, archiveCategory, availableCategoryNames, renameCategory } from '../src/lib/categories';
 import { APP_ID, LEGACY_APP_ID, DEVICE_STORAGE_KEY, LEGACY_DEVICE_STORAGE_KEY } from '../src/lib/identity';
 import type { FinanceData, Transaction } from '../src/lib/types';
 
@@ -34,7 +35,8 @@ function transaction(id: string, extra: Partial<Transaction> = {}): Transaction 
   };
 }
 function data(...entries: Transaction[]): FinanceData {
-  const result = createEmptyData(new Date(NOW));
+  let result = createEmptyData(new Date(NOW));
+  for (const name of new Set(entries.map(entry => entry.category).filter(Boolean))) result = addCategory(result, name, new Date(NOW));
   result.transactions = entries;
   result.settings.googleClientId = CLIENT_ID;
   return result;
@@ -118,6 +120,29 @@ describe('autorização Google Drive', () => {
 });
 
 describe('snapshots append-only', () => {
+  it('sincroniza catálogo, renomes e arquivamento sem ressuscitar categorias de backups antigos', async () => {
+    await drive.connectDrive(CLIENT_ID);
+    let local = data(transaction('local-purchase'));
+    const categoryId = local.categories.find(category => category.name === 'Mercado')!.id;
+    local = renameCategory(local, categoryId, 'Supermercado', new Date('2026-10-12T20:00:00.000Z'));
+    local = archiveCategory(local, categoryId, new Date('2026-10-13T20:00:00.000Z'));
+    const previous = data(transaction('previous-purchase'));
+    const { categories: _catalog, ...legacyBackup } = previous;
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      const request = new URL(url);
+      if (options?.method === 'POST') return response({ id: 'with-category-catalog', modifiedTime: NOW });
+      if (request.searchParams.get('alt') === 'media') return response(legacyBackup);
+      return response({ files: [metadata('previous-backup', 'other-device')] });
+    });
+    const result = await drive.syncDrive(local);
+    expect(result.data.transactions.map(entry => entry.category)).toEqual(['Supermercado', 'Supermercado']);
+    expect(result.data.transactions.map(entry => entry.amountCents)).toEqual([-1200, -1200]);
+    expect(result.data.categories).toHaveLength(1);
+    expect(result.data.categories[0].archivedAt).toBe('2026-10-13T20:00:00.000Z');
+    expect(availableCategoryNames(result.data)).not.toContain('Supermercado');
+    expect(uploadedData().categories).toEqual(result.data.categories);
+  });
+
   it('pagina, escolhe o último de cada dispositivo e reúne dados antes de criar um arquivo', async () => {
     await drive.connectDrive(CLIENT_ID);
     stored.set(DEVICE_STORAGE_KEY, 'local-device');

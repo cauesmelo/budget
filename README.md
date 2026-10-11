@@ -19,11 +19,17 @@ Para desenvolvimento, `npm run dev`. Para uma versão estática: `npm run build`
 
 1. Em **Importar arquivos**, selecione seu Budget. A prévia mostra o histórico e os itens de médio prazo. Confirme a importação.
 2. Escolha a **competência da fatura** e importe os extratos da conta e do cartão Itaú, em `.xls` ou `.xlsx`. Confira os avisos e confirme.
-3. Em **Lançamentos**, complete categoria e descrição. Data, lançamento original, valor, parcelas e origem já vêm preenchidos. Corrija o tipo quando necessário.
+3. Em **Lançamentos**, escolha a categoria no seletor e complete a descrição. Data, lançamento original, valor, parcelas e origem já vêm preenchidos. Corrija o tipo quando necessário.
 4. Em **Médio prazo**, confira a reserva inicial na abertura do primeiro mês, receitas, despesas e horizonte. Edite os valores esperados por mês e acompanhe os gráficos.
 5. Em **Dados e nuvem**, exporte um backup ou configure a conexão com o Google Drive.
 
 Arquivos repetidos mantêm suas edições e não recriam lançamentos excluídos. Movimentos idênticos que aparecem mais de uma vez no mesmo arquivo são preservados como ocorrências distintas. O reconhecimento depende de data, texto original, valor, conta, competência e parcela. Mudanças nessas informações em um novo extrato podem precisar de revisão.
+
+## Categorias
+
+Use **Gerenciar categorias**, disponível em Lançamentos, Médio prazo e Dados e nuvem, para criar, renomear, arquivar ou reativar opções. Os seletores permitem buscar e escolher uma categoria cadastrada; digitar na busca apenas filtra a lista. Lançamentos, inclusão manual e itens de planejamento usam a mesma lista. Você também pode manter um registro **Sem categoria** enquanto o revisa.
+
+As categorias que já existem nos dados e nas planilhas importadas entram automaticamente no cadastro. Renomear atualiza a classificação dos registros existentes; arquivar retira a categoria das opções para novos lançamentos, preservando o histórico e os filtros. O cadastro acompanha o salvamento local, o backup e a sincronização com o Drive.
 
 ## Como os valores são tratados
 
@@ -74,4 +80,4 @@ Os nomes de referência estão em `tests/private-files.test.ts`; fora desse ambi
 
 ## Estrutura
 
-`src/App.tsx` contém as telas. `src/lib/importers.ts` lê os formatos. `src/lib/finance.ts` calcula totais, projeções e fusões. `src/lib/storage.ts` valida e guarda os dados no IndexedDB. `src/lib/drive.ts` autoriza o Google e sincroniza cópias. O código usa React, TypeScript, Vite, Recharts e a versão oficial do SheetJS CE.
+`src/App.tsx` contém as telas. `src/lib/categories.ts` mantém o cadastro e a migração de categorias. `src/lib/importers.ts` lê os formatos. `src/lib/finance.ts` calcula totais, projeções e fusões. `src/lib/storage.ts` valida e guarda os dados no IndexedDB. `src/lib/drive.ts` autoriza o Google e sincroniza cópias. O código usa React, TypeScript, Vite, Recharts e a versão oficial do SheetJS CE.

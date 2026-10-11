@@ -1,4 +1,5 @@
 import type { FinanceData, ImportResult, MonthSummary, PlanItem, ProjectionMonth, Transaction } from './types';
+import { mergeCategoryCatalog, normalizeCategoryData } from './categories';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MONTH_FORMAT = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -38,7 +39,7 @@ export function createEmptyData(now = new Date()): FinanceData {
   const month = `${parts.find(part => part.type === 'year')!.value}-${parts.find(part => part.type === 'month')!.value}`;
   const updatedAt = now.toISOString();
   return {
-    version: 1, transactions: [], planItems: [], snapshots: [], imports: [],
+    version: 1, categories: [], transactions: [], planItems: [], snapshots: [], imports: [],
     settings: {
       initialReserveCents: 0, reserveStartMonth: month, monthlyReturnPercent: 0,
       reserveGoalCents: 0, horizonMonths: 24, googleClientId: '', updatedAt,
@@ -215,17 +216,20 @@ function mergeRecords<T extends { id: string; updatedAt: string; deletedAt?: str
 
 export function mergeFinanceData(local: FinanceData, remote: FinanceData): FinanceData {
   if (local.version !== 1 || remote.version !== 1) throw new Error('Versão de dados não suportada.');
+  local = normalizeCategoryData(local);
+  remote = normalizeCategoryData(remote);
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
-  const pristineLocal = local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
+  const pristineLocal = local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // O timestamp de criação em um navegador novo não é uma edição financeira.
-  const remoteHasSavedState = remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
+  const remoteHasSavedState = remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings;
   const merged = {
     version: 1 as const,
+    categories: mergeCategoryCatalog(local.categories, remote.categories),
     transactions: mergeRecords(local.transactions, remote.transactions),
     planItems: mergeRecords(local.planItems, remote.planItems),
     snapshots: mergeRecords(local.snapshots, remote.snapshots),
@@ -233,7 +237,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     settings: { ...settings, googleClientId: local.settings.googleClientId },
     updatedAt: Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local.updatedAt : remote.updatedAt,
   };
-  return structuredClone(merged);
+  return normalizeCategoryData(merged, false);
 }
 
 function transactionExists(transaction: Transaction, ids: Set<string>, fingerprints: Set<string>): boolean {
@@ -254,7 +258,7 @@ export function previewDuplicateCount(data: FinanceData, result: ImportResult): 
 
 /** ImportBatch.count registra o total de novos lançamentos, itens de planejamento e snapshots. */
 export function applyImport(data: FinanceData, result: ImportResult, filename: string, now = new Date()): FinanceData {
-  const next = structuredClone(data);
+  const next = normalizeCategoryData(data);
   const updatedAt = now.toISOString();
   const importId = crypto.randomUUID();
   const ids = new Set(next.transactions.map(item => item.id));
@@ -288,5 +292,5 @@ export function applyImport(data: FinanceData, result: ImportResult, filename: s
   }
   next.imports.push({ id: importId, filename, source: result.source, count, importedAt: updatedAt, updatedAt });
   next.updatedAt = updatedAt;
-  return next;
+  return normalizeCategoryData(next, true, updatedAt);
 }

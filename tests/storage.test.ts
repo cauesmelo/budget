@@ -3,6 +3,7 @@ import { createEmptyData } from '../src/lib/finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from '../src/lib/identity';
 import { loadData, saveData, serializeBackup, validateBackup } from '../src/lib/storage';
 import type { FinanceData } from '../src/lib/types';
+import { addCategory } from '../src/lib/categories';
 
 const memory = vi.hoisted(() => new Map<string, unknown>());
 vi.mock('idb-keyval', () => ({
@@ -13,7 +14,7 @@ vi.mock('idb-keyval', () => ({
 
 const NOW = new Date('2026-10-11T15:00:00.000Z');
 function fixture(): FinanceData {
-  const data = createEmptyData(NOW);
+  const data = addCategory(createEmptyData(NOW), 'Moradia', NOW);
   data.transactions = [{ id: 'purchase', fingerprint: 'purchase-occurrence-1', date: '2026-10-10', month: '2026-10', amountCents: -12_345, kind: 'expense', source: 'card', account: 'Cartão', originalDescription: 'Loja', description: 'Compra', category: '', sourceRow: 1, updatedAt: NOW.toISOString() }];
   data.planItems = [{ id: 'plan', name: 'Aluguel', category: 'Moradia', kind: 'expense', defaultAmountCents: 200_000, amounts: { '2026-12': 0 }, startMonth: '2026-10', updatedAt: NOW.toISOString() }];
   return data;
@@ -94,7 +95,7 @@ describe('persistência local', () => {
 
   it('prioriza os dados atuais e não repete a migração', async () => {
     memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, fixture());
-    const current = fixture();
+    const current = addCategory(fixture(), 'Categoria atualizada', NOW);
     current.transactions[0].category = 'Categoria atualizada';
     await saveData(current);
     expect(await loadData()).toEqual(current);

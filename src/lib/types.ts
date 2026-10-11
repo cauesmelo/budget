@@ -56,8 +56,16 @@ export interface Settings {
   googleClientId: string;
   updatedAt: string;
 }
+export interface Category {
+  id: string;
+  name: string;
+  updatedAt: string;
+  archivedAt?: string;
+  aliases?: string[];
+}
 export interface FinanceData {
   version: 1;
+  categories: Category[];
   transactions: Transaction[];
   planItems: PlanItem[];
   snapshots: BudgetSnapshot[];

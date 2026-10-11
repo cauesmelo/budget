@@ -53,6 +53,8 @@ Ao clicar em sincronizar, o Budget:
 5. Reúne os registros locais com os de todos esses backups. Registros diferentes são conservados; para alterações do mesmo registro, prevalece a versão mais recente. Exclusões usam registros de exclusão para não ressuscitar um lançamento apagado em outro computador. Empates são resolvidos deterministicamente pelo conteúdo.
 6. Cria um **novo backup completo** na pasta do aplicativo. A integração não altera nem apaga os backups anteriores.
 
+O cadastro de categorias também acompanha essas cópias, incluindo renomes e arquivamento. Backups anteriores que não possuem o cadastro são migrados a partir das classificações existentes. Uma categoria arquivada continua nos registros históricos, mas não pode ser escolhida para uma nova atribuição.
+
 Isso evita sobrescrever um arquivo único que outro computador acabou de atualizar. Se dois computadores sincronizarem ao mesmo tempo, cada um cria seu próprio arquivo; a próxima sincronização reúne o último arquivo de cada um. Eles podem mostrar estados diferentes até essa próxima sincronização. Isso não é colaboração simultânea em tempo real.
 
 Para um mesmo registro editado offline em dois computadores, uma das versões vence pela regra de atualização. As configurações financeiras também têm uma versão; edições simultâneas das configurações não são mescladas campo por campo. Para trabalho com vários dispositivos, sincronize antes de começar e novamente após terminar.

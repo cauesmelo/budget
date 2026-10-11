@@ -1,7 +1,8 @@
 import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
-import type { BudgetSnapshot, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
+import { categoryNameKey, normalizeCategoryData } from './categories';
+import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 let financeStore: ReturnType<typeof createStore> | undefined;
@@ -166,6 +167,24 @@ function importBatch(value: unknown, path: string): ImportBatch {
   };
 }
 
+function category(value: unknown, path: string): Category {
+  const source = object(value, path);
+  const name = string(source.name, `${path}.name`, false, 500);
+  if (name !== name.normalize('NFC').trim().replace(/\s+/g, ' ')) fail(`${path}.name`, 'deve estar sem espaços excedentes');
+  let aliases: string[] | undefined;
+  if (source.aliases !== undefined) {
+    if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'deve ser uma lista de até 1000 nomes anteriores');
+    aliases = source.aliases.map((entry, index) => string(entry, `${path}.aliases[${index}]`, false, 500));
+  }
+  return {
+    id: string(source.id, `${path}.id`, false, 1_000),
+    name,
+    updatedAt: timestamp(source.updatedAt, `${path}.updatedAt`),
+    ...(source.archivedAt !== undefined ? { archivedAt: timestamp(source.archivedAt, `${path}.archivedAt`) } : {}),
+    ...(aliases !== undefined ? { aliases } : {}),
+  };
+}
+
 function settings(value: unknown): Settings {
   const source = object(value, 'settings');
   const reserveStartMonth = month(source.reserveStartMonth, 'settings.reserveStartMonth');
@@ -204,8 +223,19 @@ export function validateBackup(payload: unknown): FinanceData {
   }
   const source = object(data, 'arquivo');
   if (source.version !== 1) throw new Error('Versão de backup não suportada. Esta aplicação lê somente a versão 1.');
-  return {
+  const categories = source.categories === undefined ? [] : array(source.categories, 'categories', category, 12_000);
+  const categoryLabels = new Map<string, string>();
+  for (const record of categories) {
+    for (const label of [record.name, ...(record.aliases ?? [])]) {
+      const key = categoryNameKey(label);
+      const otherId = categoryLabels.get(key);
+      if (otherId && otherId !== record.id) fail('categories', 'contém nomes duplicados');
+      categoryLabels.set(key, record.id);
+    }
+  }
+  const parsed: FinanceData = {
     version: 1,
+    categories,
     transactions: array(source.transactions, 'transactions', transaction, 200_000),
     planItems: array(source.planItems, 'planItems', planItem, 10_000),
     snapshots: array(source.snapshots, 'snapshots', snapshot, 12_000),
@@ -213,4 +243,6 @@ export function validateBackup(payload: unknown): FinanceData {
     settings: settings(source.settings),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
+  try { return normalizeCategoryData(parsed, source.categories === undefined); }
+  catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contém uma categoria inválida'); }
 }
