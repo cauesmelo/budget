@@ -294,3 +294,46 @@ export function applyImport(data: FinanceData, result: ImportResult, filename: s
   next.updatedAt = updatedAt;
   return normalizeCategoryData(next, true, updatedAt);
 }
+
+/** Recibo persistido junto com os dados, inclusive nos backups e na nuvem. */
+export const INITIAL_IMPORT_ID = 'initial-legacy-budget-v1';
+
+/** Alimenta o histórico legado uma vez, preservando ajustes e exclusões anteriores. */
+export function applyInitialImport(data: FinanceData, result: ImportResult, filename: string, now = new Date()): FinanceData {
+  if (data.imports.some(batch => batch.id === INITIAL_IMPORT_ID)) return data;
+  if (result.source !== 'budget') throw new Error('A carga inicial aceita somente o Budget legado.');
+  const updatedAt = now.toISOString();
+  // A versão anterior usava o mês da data, mesmo quando a linha pertencia a
+  // outra aba mensal. Corrija a competência sem substituir a edição da linha.
+  const legacyKey = (item: Transaction) => JSON.stringify([item.date, item.originalDescription, item.account, item.amountCents, item.sourceRow]);
+  const incomingByRow = new Map<string, Transaction | null>();
+  for (const item of result.transactions) {
+    if (item.source !== 'budget' || item.sourceRow === undefined) continue;
+    const key = legacyKey(item);
+    // A posição da linha se repete entre abas. Uma associação ambígua não é
+    // suficiente para corrigir a competência de um registro já existente.
+    incomingByRow.set(key, incomingByRow.has(key) ? null : item);
+  }
+  const current = {
+    ...data,
+    transactions: data.transactions.map(item => {
+      if (item.source !== 'budget' || item.sourceRow === undefined || item.month !== item.date.slice(0, 7)) return item;
+      const incoming = incomingByRow.get(legacyKey(item));
+      return incoming && incoming.month !== item.month
+        ? { ...item, month: incoming.month, updatedAt }
+        : item;
+    }),
+  };
+  const keepSettings = data.planItems.length > 0 || data.snapshots.length > 0 ||
+    data.settings.initialReserveCents !== 0 || data.settings.reserveGoalCents !== 0 ||
+    data.settings.monthlyReturnPercent !== 0 || data.settings.horizonMonths !== 24 ||
+    data.settings.reserveStartMonth !== createEmptyData(now).settings.reserveStartMonth;
+  const next = applyImport(current, result, filename, now);
+  const batch = next.imports.at(-1)!;
+  const generatedId = batch.id;
+  batch.id = INITIAL_IMPORT_ID;
+  for (const item of next.transactions) if (item.importId === generatedId) item.importId = INITIAL_IMPORT_ID;
+  if (keepSettings) next.settings = structuredClone(data.settings);
+  next.settings.googleClientId = data.settings.googleClientId;
+  return next;
+}

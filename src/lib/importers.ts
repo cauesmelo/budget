@@ -239,7 +239,7 @@ function parseBudget(workbook: XLSX.WorkBook, filename: string, options: ImportO
       if (!date || !originalDescription || rawCents === null) continue;
       const category = text(row[categoryCol]);
       const kind: TransactionKind = normalize(category) === 'investimentos' || isTransfer(originalDescription) ? 'transfer' : 'expense';
-      result.transactions.push(makeTransaction({ date, month: date.slice(0, 7), amountCents: -rawCents, kind, account: 'Histórico Budget', originalDescription, description: descriptionCol >= 0 ? text(row[descriptionCol]) : '', category, sourceRow: i + 1 }));
+      result.transactions.push(makeTransaction({ date, month, amountCents: -rawCents, kind, account: 'Histórico Budget', originalDescription, description: descriptionCol >= 0 ? text(row[descriptionCol]) : '', category, sourceRow: i + 1 }));
       if (kind === 'expense') {
         expenseCents += rawCents;
         const categoryName = category || 'Sem categoria';

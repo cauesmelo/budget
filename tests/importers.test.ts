@@ -204,4 +204,16 @@ describe('Budget migration', () => {
     expect(parseWorkbook(input, 'historico.xlsx', { referenceYear: 2024 }).transactions[0].date).toBe('2024-05-03');
     expect(parseWorkbook(input, 'budget-2026.xlsx').transactions[0].date).toBe('2026-05-03');
   });
+
+  it('preserves the budget sheet competence when the original date falls in another month', () => {
+    const source = workbook({ Abril: [
+      ['Data', 'Nome', 'Saída', 'Categoria'],
+      [new Date('2026-03-31T00:00:00Z'), 'Compra exemplo', 12.34, 'Mercado'],
+      [new Date('2026-04-02T00:00:00Z'), 'Outra compra', 10, 'Mercado'],
+    ] });
+    const result = parseWorkbook(source, 'budget-2026.xlsx');
+    expect(result.transactions[0]).toMatchObject({ date: '2026-03-31', month: '2026-04', amountCents: -1234 });
+    expect(result.transactions.every(transaction => transaction.month === '2026-04')).toBe(true);
+    expect(result.snapshots[0]).toMatchObject({ month: '2026-04', expenseCents: 2234, categories: { Mercado: 2234 } });
+  });
 });

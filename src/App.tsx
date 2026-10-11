@@ -89,7 +89,18 @@ export default function App() {
   const dataRef = useRef(data);
   dataRef.current = data;
 
-  useEffect(() => { loadData().then(saved => { if (saved) setData(saved); setLoaded(true); }).catch(e => { setStorageAvailable(false); setLoaded(true); setError(`Não foi possível abrir os dados locais. Você pode usar uma sessão temporária e exportar um backup: ${e.message}`); setSaveStatus('Sessão temporária · exporte um backup'); }); }, []);
+  useEffect(() => {
+    loadData().then(saved => {
+      if (saved) {
+        setData(saved);
+        if (!saved.transactions.some(item => !item.deletedAt && item.source !== 'budget')) {
+          const latest = [...saved.snapshots.map(item => item.month), ...saved.transactions.filter(item => !item.deletedAt && item.source === 'budget').map(item => item.month)].sort().at(-1);
+          if (latest) { setMode('budget'); setMonth(latest); }
+        }
+      }
+      setLoaded(true);
+    }).catch(e => { setStorageAvailable(false); setLoaded(true); setError(`Não foi possível abrir os dados locais. Você pode usar uma sessão temporária e exportar um backup: ${e.message}`); setSaveStatus('Sessão temporária · exporte um backup'); });
+  }, []);
   useEffect(() => {
     if (!loaded || !storageAvailable) return;
     setSaveStatus('Salvando…');
