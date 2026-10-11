@@ -5,18 +5,18 @@ import type { FinanceData, ImportResult, PlanItem, Transaction } from '../src/li
 const NOW = new Date('2026-10-11T15:00:00.000Z');
 const transaction = (id: string, amountCents: number, patch: Partial<Transaction> = {}): Transaction => ({
   id, fingerprint: `fingerprint-${id}`, date: '2026-10-10', month: '2026-10', amountCents,
-  kind: amountCents > 0 ? 'income' : 'expense', source: 'bank', account: 'Conta',
-  originalDescription: 'Descrição original', description: 'Descrição', category: 'Alimentação',
+  kind: amountCents > 0 ? 'income' : 'expense', source: 'bank', account: 'Account',
+  originalDescription: 'Original description', description: 'Description', category: 'Food',
   updatedAt: NOW.toISOString(), ...patch,
 });
 const planItem = (id: string, kind: PlanItem['kind'], defaultAmountCents: number, patch: Partial<PlanItem> = {}): PlanItem => ({
-  id, kind, name: 'Planejamento', category: '', defaultAmountCents, amounts: {}, startMonth: '2026-10',
+  id, kind, name: 'Plan', category: '', defaultAmountCents, amounts: {}, startMonth: '2026-10',
   updatedAt: NOW.toISOString(), ...patch,
 });
 const result = (transactions: Transaction[] = []): ImportResult => ({ source: 'bank', transactions, planItems: [], snapshots: [], warnings: [] });
 
-describe('datas e centavos', () => {
-  it('usa o mês de São Paulo mesmo junto à virada UTC', () => {
+describe('dates and cents', () => {
+  it('uses the Sao Paulo month at UTC month boundaries', () => {
     expect(createEmptyData(new Date('2026-10-01T00:10:00.000Z')).settings.reserveStartMonth).toBe('2026-09');
     expect(addMonths('2026-12', 1)).toBe('2027-01');
     expect(addMonths('2026-01', -1)).toBe('2025-12');
@@ -32,17 +32,17 @@ describe('datas e centavos', () => {
     ['1.234', 123400], ['1234.567', 123457], ['1234,567', 123457],
     [1.005, 101], [-1.005, -101], ['0,005', 1], ['-0,005', -1],
     ['', 0], [null, 0], ['—', 0], [0, 0],
-  ])('converte %s para %i centavos', (value, expected) => {
+  ])('converts %s to %i cents', (value, expected) => {
     expect(parseMoneyToCents(value)).toBe(expected);
   });
 
-  it.each(['10/10/2026', 'dez reais', '12.34.567', '1,23,45', NaN, Infinity, 1e20, {}])('recusa valor inválido %s', value => {
+  it.each(['10/10/2026', 'ten currency units', '12.34.567', '1,23,45', NaN, Infinity, 1e20, {}])('rejects invalid values: %s', value => {
     expect(() => parseMoneyToCents(value)).toThrow();
   });
 });
 
-describe('resumo mensal', () => {
-  it('subtrai estorno, ignora transferência/pagamento de fatura e mantém Budget separado', () => {
+describe('monthly summary', () => {
+  it('deducts refunds, excludes transfers and card payments, and keeps Budget history separate', () => {
     const data = createEmptyData(NOW);
     data.transactions = [
       transaction('salary', 300_000), transaction('purchase', -20_000),
@@ -55,20 +55,20 @@ describe('resumo mensal', () => {
     ];
     expect(summarizeMonth(data, '2026-10')).toEqual({
       month: '2026-10', incomeCents: 300_000, expenseCents: 25_000, netCents: 275_000,
-      categories: { Alimentação: 25_000 }, count: 4,
+      categories: { Food: 25_000 }, count: 4,
     });
     expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(100_000);
-    data.snapshots.push({ id: 'snapshot', month: '2026-10', incomeCents: 250_000, expenseCents: 110_000, categories: { Geral: 110_000 }, updatedAt: NOW.toISOString() });
+    data.snapshots.push({ id: 'snapshot', month: '2026-10', incomeCents: 250_000, expenseCents: 110_000, categories: { General: 110_000 }, updatedAt: NOW.toISOString() });
     expect(summarizeMonth(data, '2026-10', 'budget').netCents).toBe(150_000);
-    expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({ Alimentação: 100_000 });
+    expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({ Food: 100_000 });
     expect(summarizeMonth(data, '2026-10').expenseCents).toBe(25_000);
   });
 
-  it('reflete categoria, tipo e exclusão de lançamentos Budget mesmo com snapshot existente', () => {
+  it('reflects category, type, and deletion changes in Budget records even with existing snapshots', () => {
     const data = createEmptyData(NOW);
-    data.snapshots = [{ id: 'budget-snapshot', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { Antiga: 30_000 }, updatedAt: NOW.toISOString() }];
-    data.transactions = [transaction('budget-1', -10_000, { source: 'budget', category: 'Nova categoria' }), transaction('budget-2', -20_000, { source: 'budget', kind: 'transfer' })];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 10_000, netCents: 30_000, categories: { 'Nova categoria': 10_000 }, count: 1 });
+    data.snapshots = [{ id: 'budget-snapshot', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { Previous: 30_000 }, updatedAt: NOW.toISOString() }];
+    data.transactions = [transaction('budget-1', -10_000, { source: 'budget', category: 'New category' }), transaction('budget-2', -20_000, { source: 'budget', kind: 'transfer' })];
+    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 10_000, netCents: 30_000, categories: { 'New category': 10_000 }, count: 1 });
     data.transactions[0].deletedAt = NOW.toISOString();
     expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(0);
     expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({});
@@ -79,25 +79,25 @@ describe('resumo mensal', () => {
     expect(summarizeMonth(data, '2026-10', 'budget').incomeCents).toBe(0);
   });
 
-  it('continua aceitando snapshot histórico quando não há lançamentos Budget no mês', () => {
+  it('accepts historical snapshots when the month has no Budget transactions', () => {
     const data = createEmptyData(NOW);
-    data.snapshots = [{ id: 'snapshot-only', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { Histórico: 30_000 }, updatedAt: NOW.toISOString() }];
+    data.snapshots = [{ id: 'snapshot-only', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { History: 30_000 }, updatedAt: NOW.toISOString() }];
     data.transactions = [transaction('bank-real', -99_000)];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, netCents: 10_000, categories: { Histórico: 30_000 }, count: 0 });
+    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, netCents: 10_000, categories: { History: 30_000 }, count: 0 });
   });
 
-  it('preserva categorias vazias e nomes que coincidem com propriedades de objeto', () => {
+  it('preserves empty categories and names matching object properties', () => {
     const data = createEmptyData(NOW);
     data.transactions = [transaction('blank', -150, { category: '' }), transaction('prototype', -250, { category: '__proto__' })];
     const summary = summarizeMonth(data, '2026-10');
-    expect(summary.categories['Sem categoria']).toBe(150);
+    expect(summary.categories['Uncategorized']).toBe(150);
     expect(summary.categories.__proto__).toBe(250);
     expect(Object.getPrototypeOf(summary.categories)).toBe(Object.prototype);
   });
 });
 
-describe('planejamento da reserva', () => {
-  it('calcula desde o mês de referência, juros da abertura e centavos inteiros', () => {
+describe('reserve planning', () => {
+  it('projects from the reference month using opening-balance interest and integer cents', () => {
     const data = createEmptyData(NOW);
     data.settings = { ...data.settings, initialReserveCents: 100_005, reserveStartMonth: '2026-12', monthlyReturnPercent: 0.5, horizonMonths: 3 };
     data.planItems = [
@@ -114,7 +114,7 @@ describe('planejamento da reserva', () => {
     ]);
   });
 
-  it('respeita os limites ativos antes do override, inclusive zero dentro do intervalo', () => {
+  it('checks active dates before overrides, including explicit zero within the range', () => {
     const item = planItem('dated', 'expense', 1_000, { startMonth: '2026-11', endMonth: '2027-01', amounts: { '2026-10': 500, '2026-12': 0, '2027-02': 700 } });
     expect(planAmountForMonth(item, '2026-09')).toBe(0);
     expect(planAmountForMonth(item, '2026-10')).toBe(0);
@@ -123,7 +123,7 @@ describe('planejamento da reserva', () => {
     expect(planAmountForMonth(item, '2027-02')).toBe(0);
   });
 
-  it('arredonda cada mês, mantém déficit assinado e ignora lançamentos reais na previsão', () => {
+  it('rounds each month, preserves signed deficits, and excludes actual transactions from forecasts', () => {
     const data = createEmptyData(NOW);
     data.settings = { ...data.settings, initialReserveCents: -101, monthlyReturnPercent: 50, horizonMonths: 2 };
     data.transactions = [transaction('large-real-income', 1_000_000)];
@@ -131,31 +131,31 @@ describe('planejamento da reserva', () => {
   });
 });
 
-describe('reimportação e sincronização', () => {
-  it('reimportar preserva edições/exclusões e não perde duas compras legítimas idênticas', () => {
+describe('reimporting and synchronization', () => {
+  it('reimporting preserves edits and deletions without losing legitimate identical purchases', () => {
     const incoming = result([transaction('purchase-1', -1_000), transaction('purchase-2', -1_000)]);
-    let data = applyImport(createEmptyData(NOW), incoming, 'extrato.xlsx', NOW);
-    data.transactions[0].category = 'Compras';
-    data.transactions[0].description = 'Edição manual';
+    let data = applyImport(createEmptyData(NOW), incoming, 'statement.xlsx', NOW);
+    data.transactions[0].category = 'Shopping';
+    data.transactions[0].description = 'Manual edit';
     data.transactions[1].deletedAt = NOW.toISOString();
     expect(previewDuplicateCount(data, incoming)).toBe(2);
-    const next = applyImport(data, incoming, 'outra-cópia.xlsx', NOW);
+    const next = applyImport(data, incoming, 'another-copy.xlsx', NOW);
     expect(next.transactions).toHaveLength(2);
-    expect(next.transactions[0].description).toBe('Edição manual');
+    expect(next.transactions[0].description).toBe('Manual edit');
     expect(next.transactions[1].deletedAt).toBe(NOW.toISOString());
     expect(next.imports.at(-1)?.count).toBe(0);
     expect(data.imports).toHaveLength(1);
   });
 
-  it('ignora um fingerprint repetido dentro do arquivo e detecta mesmo lançamento com outro id', () => {
+  it('ignores duplicate fingerprints in a file and recognizes the same transaction under another ID', () => {
     const data = createEmptyData(NOW);
     data.transactions = [transaction('existing', -500)];
     const imported = result([transaction('new-id', -500, { fingerprint: 'fingerprint-existing' }), transaction('new', -400), transaction('new-copy', -400, { fingerprint: 'fingerprint-new' })]);
     expect(previewDuplicateCount(data, imported)).toBe(2);
-    expect(applyImport(data, imported, 'arquivo.xlsx', NOW).transactions).toHaveLength(2);
+    expect(applyImport(data, imported, 'file.xlsx', NOW).transactions).toHaveLength(2);
   });
 
-  it('semeia a configuração do primeiro Budget sem substituir ajustes na reimportação', () => {
+  it('seeds settings from the first Budget without replacing edits on reimport', () => {
     const imported = { ...result(), source: 'budget' as const, planItems: [planItem('income', 'income', 10_000)], suggestedSettings: { initialReserveCents: 80_000, googleClientId: 'remote-client' } };
     let data = createEmptyData(NOW);
     data.settings.googleClientId = 'local-client';
@@ -166,7 +166,7 @@ describe('reimportação e sincronização', () => {
     expect(applyImport(data, imported, 'budget.xlsx', NOW).settings.initialReserveCents).toBe(100_000);
   });
 
-  it('faz união por id, preserva exclusão mais recente e mantém o cliente Google local', () => {
+  it('merges by ID, preserves the latest deletion, and keeps the local Google client', () => {
     const local = createEmptyData(NOW);
     const remote = createEmptyData(new Date('2026-10-12T15:00:00.000Z'));
     local.transactions = [transaction('common', -1_000), transaction('local-only', -500)];
@@ -182,30 +182,30 @@ describe('reimportação e sincronização', () => {
     expect(local.transactions[0].deletedAt).toBeUndefined();
   });
 
-  it('adota as configurações antigas da nuvem no primeiro acesso em um navegador vazio', () => {
+  it('adopts existing cloud settings on first access from an empty browser', () => {
     const local = createEmptyData(new Date('2026-11-01T15:00:00.000Z'));
-    local.settings.googleClientId = 'cliente-deste-computador';
+    local.settings.googleClientId = 'this-device-client';
     const remote = createEmptyData(NOW);
     remote.settings = { ...remote.settings, initialReserveCents: 150_000, reserveGoalCents: 500_000, monthlyReturnPercent: 0.5, horizonMonths: 36 };
     remote.transactions = [transaction('saved', -1_000)];
     const merged = mergeFinanceData(local, remote);
-    expect(merged.settings).toEqual({ ...remote.settings, googleClientId: 'cliente-deste-computador' });
+    expect(merged.settings).toEqual({ ...remote.settings, googleClientId: 'this-device-client' });
     expect(projectReserve(merged)[0].openingCents).toBe(150_000);
     expect(projectReserve(merged)[0].month).toBe('2026-10');
     expect(merged.transactions).toHaveLength(1);
   });
 
-  it('adota planejamento salvo contendo somente configurações, mantendo configuração local do OAuth', () => {
+  it('adopts saved settings-only plans while keeping local OAuth settings', () => {
     const local = createEmptyData(new Date('2026-11-01T15:00:00.000Z'));
-    local.settings.googleClientId = 'cliente-local';
+    local.settings.googleClientId = 'local-client';
     const remote = createEmptyData(NOW);
-    remote.settings = { ...remote.settings, initialReserveCents: 250_000, horizonMonths: 12, googleClientId: 'outro-cliente' };
-    expect(mergeFinanceData(local, remote).settings).toEqual({ ...remote.settings, googleClientId: 'cliente-local' });
+    remote.settings = { ...remote.settings, initialReserveCents: 250_000, horizonMonths: 12, googleClientId: 'other-client' };
+    expect(mergeFinanceData(local, remote).settings).toEqual({ ...remote.settings, googleClientId: 'local-client' });
     remote.settings = { ...remote.settings, initialReserveCents: 0, horizonMonths: 24, googleClientId: '' };
     expect(mergeFinanceData(local, remote).settings.reserveStartMonth).toBe('2026-10');
   });
 
-  it('não deixa clientID decidir desempate de configuração financeira entre computadores', () => {
+  it('does not use client IDs to break financial-settings ties between devices', () => {
     const local = createEmptyData(NOW);
     const remote = createEmptyData(NOW);
     local.settings = { ...local.settings, horizonMonths: 12, googleClientId: 'zzzz' };
@@ -218,7 +218,7 @@ describe('reimportação e sincronização', () => {
     expect(right.googleClientId).toBe('aaaa');
   });
 
-  it('resolve empates de maneira estável, convergente e idempotente', () => {
+  it('resolves ties deterministically, convergently, and idempotently', () => {
     const local = createEmptyData(NOW);
     const remote = createEmptyData(NOW);
     local.transactions = [transaction('same', -100, { description: 'A' })];

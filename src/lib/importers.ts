@@ -1,10 +1,12 @@
 import * as XLSX from 'xlsx';
 import { parseMoneyToCents } from './finance';
+import { canonicalAccountIdentity } from './identity';
 import type { BudgetSnapshot, ImportOptions, ImportResult, PlanItem, Transaction, TransactionKind, TransactionSource } from './types';
 
 type Cell = string | number | boolean | Date | null | undefined;
 type Rows = Cell[][];
 type InputFile = { name: string; arrayBuffer(): Promise<ArrayBuffer> };
+// Portuguese month names, headers, and classifiers below match external workbook formats.
 const MONTHS = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const text = (value: Cell): string => String(value ?? '').trim();
 const normalize = (value: Cell): string => text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ');
@@ -59,7 +61,7 @@ function createTransactionFactory(source: TransactionSource, filename: string) {
   const occurrences = new Map<string, number>();
   const updatedAt = new Date().toISOString();
   return (fields: Omit<Transaction, 'id' | 'fingerprint' | 'source' | 'sourceFile' | 'updatedAt'>): Transaction => {
-    const key = JSON.stringify([source, normalize(fields.account), fields.date, source === 'card' ? fields.month : '', normalize(fields.originalDescription), fields.amountCents, fields.installment ?? '']);
+    const key = JSON.stringify([source, canonicalAccountIdentity(fields.account), fields.date, source === 'card' ? fields.month : '', normalize(fields.originalDescription), fields.amountCents, fields.installment ?? '']);
     const occurrence = occurrences.get(key) ?? 0;
     occurrences.set(key, occurrence + 1);
     const fingerprint = `v1-${stableHash(`${key}:${occurrence}`)}`;
@@ -83,12 +85,12 @@ function bankAccount(rows: Rows): string {
     if (/^(conta|conta corrente|numero da conta)$/.test(label) && /^[\d.\s-]+$/.test(value)) account = value.replace(/[.\s]/g, '');
     if (/^(agencia|agencia da conta)$/.test(label) && /^[\d.\s-]+$/.test(value)) agency = value.replace(/[.\s]/g, '');
   }
-  return `Conta corrente Itaú${account ? ` • ${agency ? `${agency}/` : ''}${account}` : ''}`;
+  return `Itaú checking account${account ? ` • ${agency ? `${agency}/` : ''}${account}` : ''}`;
 }
 
 function cardAccount(value: Cell, fallback: string): string {
   const digits = text(value).replace(/\D/g, '');
-  return `Cartão Itaú${digits.length >= 4 ? ` ****${digits.slice(-4)}` : fallback ? ` ****${fallback}` : ''}`;
+  return `Itaú card${digits.length >= 4 ? ` ****${digits.slice(-4)}` : fallback ? ` ****${fallback}` : ''}`;
 }
 
 function parseBank(rows: Rows, filename: string): ImportResult | null {
@@ -121,10 +123,10 @@ function parseBank(rows: Rows, filename: string): ImportResult | null {
     const kind: TransactionKind = isTransfer(originalDescription) ? 'transfer' : amountCents < 0 ? 'expense' : 'income';
     result.transactions.push(makeTransaction({ date, month: date.slice(0, 7), amountCents, kind, account, originalDescription, description: '', category: '', sourceRow: i + 1 }));
   }
-  if (skipped) result.warnings.push(`${skipped} linha(s) com data e lançamento sem valor válido foram ignoradas.`);
-  if (exportedDate && result.transactions.some(t => t.date > exportedDate)) result.warnings.push('O extrato contém movimentos com data posterior à atualização do arquivo. Eles foram preservados; revise se são lançamentos previstos ou datas de processamento bancário.');
-  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Pagamentos de cartão, aplicações e resgates identificáveis foram marcados como transferência para evitar duplicar gastos ou renda. Revise o tipo desses lançamentos.');
-  result.summary = `${result.transactions.length} lançamentos da conta corrente. Saldos e totais foram ignorados.`;
+  if (skipped) result.warnings.push(`${skipped} row(s) with a date and transaction but no valid amount were skipped.`);
+  if (exportedDate && result.transactions.some(t => t.date > exportedDate)) result.warnings.push('The statement contains transactions dated after the file was updated. They were preserved; check whether they are scheduled transactions or bank processing dates.');
+  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Identifiable card payments, investments, and withdrawals were marked as transfers to avoid duplicate expenses or income. Review their transaction types.');
+  result.summary = `${result.transactions.length} checking account transactions. Balances and totals were ignored.`;
   return result;
 }
 
@@ -169,8 +171,8 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
   const result = emptyResult('card');
   const metadata = cardMetadata(rows, sheetName, filename);
   const month = options.cardMonth ?? metadata.month;
-  if (!month || !validMonth(month)) throw new Error('Não foi possível identificar o mês da fatura. Escolha a competência (AAAA-MM) antes de importar.');
-  if (options.cardMonth && metadata.month && options.cardMonth !== metadata.month) result.warnings.push(`A competência escolhida (${options.cardMonth}) difere da fatura identificada (${metadata.month}).`);
+  if (!month || !validMonth(month)) throw new Error('Could not identify the statement month. Choose the budget month (YYYY-MM) before importing.');
+  if (options.cardMonth && metadata.month && options.cardMonth !== metadata.month) result.warnings.push(`The selected budget month (${options.cardMonth}) differs from the detected statement month (${metadata.month}).`);
   const headers = rows[index].map(normalize);
   const dateCol = headers.indexOf('data');
   const labelCol = headers.indexOf('lancamento');
@@ -196,12 +198,12 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
     const installment = installmentMatch ? `${Number(installmentMatch[1])}/${Number(installmentMatch[2])}` : rawInstallment || undefined;
     result.transactions.push(makeTransaction({ date, month, amountCents, kind, account: cardAccount(accountCol >= 0 ? row[accountCol] : null, defaultCard), originalDescription, description: '', category: '', installment, sourceRow: i + 1 }));
   }
-  if (metadata.partialCents !== null && Math.abs(positiveCharges - metadata.partialCents) > 1) result.warnings.push('A soma das cobranças importadas difere do total informado na fatura. Confira estornos, pagamentos e lançamentos antes de fechar o mês.');
-  if (skipped) result.warnings.push(`${skipped} lançamento(s) com data sem valor válido foram ignorados.`);
-  result.warnings.push('A data é a data original da compra; o mês de orçamento é a competência da fatura. Compras antigas parceladas não foram lançadas novamente no mês da compra.');
-  if (metadata.open) result.warnings.push('Esta fatura está aberta. Compras recentes e parcelas podem mudar até o fechamento; revise alterações de valor ao importar uma versão atualizada.');
-  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Pagamentos da fatura foram marcados como transferência e não entram em despesas ou receitas.');
-  result.summary = `${result.transactions.length} lançamentos de cartão na competência ${month}.`;
+  if (metadata.partialCents !== null && Math.abs(positiveCharges - metadata.partialCents) > 1) result.warnings.push('The sum of imported charges differs from the statement total. Check refunds, payments, and transactions before closing the month.');
+  if (skipped) result.warnings.push(`${skipped} dated transaction(s) without a valid amount were skipped.`);
+  result.warnings.push('The date is the original purchase date; the budget month is the statement month. Older installment purchases were not recorded again in the purchase month.');
+  if (metadata.open) result.warnings.push('This statement is still open. Recent purchases and installments may change before closing; review changed amounts when importing an updated version.');
+  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Statement payments were marked as transfers and are excluded from expenses and income.');
+  result.summary = `${result.transactions.length} card transactions for budget month ${month}.`;
   return result;
 }
 
@@ -215,7 +217,7 @@ function parseBudget(workbook: XLSX.WorkBook, filename: string, options: ImportO
   const yearFromPlan = planRows.flat().map(readDate).find(Boolean)?.slice(0, 4);
   const yearFromHistory = monthSheets.flatMap(name => getRows(workbook.Sheets[name]).slice(0, 30).map(row => readDate(row[0]))).find(Boolean)?.slice(0, 4);
   const inferredYear = options.referenceYear ?? Number(filename.match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1] ?? yearFromPlan ?? yearFromHistory ?? 0);
-  if (monthSheets.length && (inferredYear < 1900 || inferredYear > 2200)) throw new Error('As abas mensais informam apenas o dia. Informe o ano de referência para importar o histórico.');
+  if (monthSheets.length && (inferredYear < 1900 || inferredYear > 2200)) throw new Error('Monthly sheets provide only the day. Enter the reference year to import the history.');
   const makeTransaction = createTransactionFactory('budget', filename);
   for (const sheetName of monthSheets) {
     const rows = getRows(workbook.Sheets[sheetName]);
@@ -239,17 +241,17 @@ function parseBudget(workbook: XLSX.WorkBook, filename: string, options: ImportO
       if (!date || !originalDescription || rawCents === null) continue;
       const category = text(row[categoryCol]);
       const kind: TransactionKind = normalize(category) === 'investimentos' || isTransfer(originalDescription) ? 'transfer' : 'expense';
-      result.transactions.push(makeTransaction({ date, month, amountCents: -rawCents, kind, account: 'Histórico Budget', originalDescription, description: descriptionCol >= 0 ? text(row[descriptionCol]) : '', category, sourceRow: i + 1 }));
+      result.transactions.push(makeTransaction({ date, month, amountCents: -rawCents, kind, account: 'Budget history', originalDescription, description: descriptionCol >= 0 ? text(row[descriptionCol]) : '', category, sourceRow: i + 1 }));
       if (kind === 'expense') {
         expenseCents += rawCents;
-        const categoryName = category || 'Sem categoria';
+        const categoryName = category || 'Uncategorized';
         categories[categoryName] = (categories[categoryName] ?? 0) + rawCents;
       }
     }
     const snapshot: BudgetSnapshot = { id: `snapshot-${month}`, month, incomeCents: 0, expenseCents, categories, updatedAt };
     result.snapshots.push(snapshot);
   }
-  if (monthSheets.length) result.warnings.push('Os totais históricos foram reconstruídos das linhas, incluindo todas as categorias de consumo. Investimentos foram marcados como transferência. Os resultados podem diferir de indicadores da planilha que excluam determinadas categorias.');
+  if (monthSheets.length) result.warnings.push('Historical totals were rebuilt from the rows, including every expense category. Investments were marked as transfers. Results may differ from workbook indicators that exclude some categories.');
   if (planSheetName) {
     const monthHeader = planRows.findIndex(row => row.filter(v => readDate(v)?.endsWith('-01')).length >= 2);
     if (monthHeader >= 0) {
@@ -277,20 +279,21 @@ function parseBudget(workbook: XLSX.WorkBook, filename: string, options: ImportO
         const months = Object.keys(amounts).sort();
         if (!months.length) continue;
         const kind: PlanItem['kind'] = label === 'receita' ? 'income' : /aporte.*reserva|^investimento/.test(label) ? 'contribution' : 'expense';
+        // Keep the legacy investment category so existing user categories remain unchanged.
         result.planItems.push({ id: `plan-${stableHash(normalize(name))}`, name, category: kind === 'contribution' ? 'Investimentos' : name, kind, defaultAmountCents: amounts[months.at(-1)!], amounts, startMonth: months[0], endMonth: months.at(-1), updatedAt });
       }
-      result.warnings.push('O aporte mínimo foi preservado como meta de aporte. Como é uma transferência interna, não é descontado novamente da evolução da reserva; a planilha original já o devolve no cálculo da reserva do mês seguinte.');
+      result.warnings.push('The minimum contribution was preserved as a contribution target. As an internal transfer, it is not deducted again from reserve growth; the original workbook already adds it back when calculating the following month.');
       const invalidCells = Object.entries(workbook.Sheets[planSheetName]).filter(([key, cell]) => !key.startsWith('!') && (cell.t === 'e' || cell.f?.includes('#REF!'))).length;
-      if (invalidCells) result.warnings.push('A projeção original contém referências quebradas ou divisões por zero. As fórmulas não foram copiadas; foram importados os valores de entrada e a primeira reserva explícita válida.');
+      if (invalidCells) result.warnings.push('The original projection contains broken references or division by zero. Formulas were not copied; input values and the first valid explicit reserve were imported.');
     }
   }
-  result.summary = `${result.transactions.length} lançamentos históricos, ${result.snapshots.length} meses e ${result.planItems.length} itens de planejamento.`;
+  result.summary = `${result.transactions.length} historical transactions, ${result.snapshots.length} months, and ${result.planItems.length} planning items.`;
   return result;
 }
 
 /** Parses source values only; spreadsheet formulas and embedded instructions are never executed. */
 export function parseWorkbook(workbook: XLSX.WorkBook, filename: string, options: ImportOptions = {}): ImportResult {
-  if (options.cardMonth && !validMonth(options.cardMonth)) throw new Error('Competência inválida. Use o formato AAAA-MM.');
+  if (options.cardMonth && !validMonth(options.cardMonth)) throw new Error('Invalid budget month. Use YYYY-MM format.');
   const budget = parseBudget(workbook, filename, options);
   if (budget) return budget;
   for (const name of workbook.SheetNames) {
@@ -300,17 +303,17 @@ export function parseWorkbook(workbook: XLSX.WorkBook, filename: string, options
     const bank = parseBank(rows, filename);
     if (bank) return bank;
   }
-  throw new Error('Formato não reconhecido. Use o Budget ou um extrato Itaú de conta corrente/cartão em XLS, XLSX ou CSV com cabeçalhos.');
+  throw new Error('Unrecognized format. Use a Budget workbook or an Itau checking account/card statement in XLS, XLSX, or CSV format with headers.');
 }
 
 export async function parseImport(file: File | InputFile, options: ImportOptions = {}): Promise<ImportResult> {
   const buffer = await file.arrayBuffer();
-  if (buffer.byteLength > 30 * 1024 * 1024) throw new Error('O arquivo excede 30 MB. Exporte um período menor.');
+  if (buffer.byteLength > 30 * 1024 * 1024) throw new Error('The file exceeds 30 MB. Export a shorter period.');
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: true, cellFormula: true });
   } catch {
-    throw new Error('Não foi possível ler a planilha. Confira se o arquivo é um XLS, XLSX ou CSV válido e não está protegido por senha.');
+    throw new Error('Could not read the workbook. Check that the file is a valid XLS, XLSX, or CSV and is not password protected.');
   }
   return parseWorkbook(workbook, file.name, options);
 }

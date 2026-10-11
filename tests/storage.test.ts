@@ -14,23 +14,23 @@ vi.mock('idb-keyval', () => ({
 
 const NOW = new Date('2026-10-11T15:00:00.000Z');
 function fixture(): FinanceData {
-  const data = addCategory(createEmptyData(NOW), 'Moradia', NOW);
-  data.transactions = [{ id: 'purchase', fingerprint: 'purchase-occurrence-1', date: '2026-10-10', month: '2026-10', amountCents: -12_345, kind: 'expense', source: 'card', account: 'Cartão', originalDescription: 'Loja', description: 'Compra', category: '', sourceRow: 1, updatedAt: NOW.toISOString() }];
-  data.planItems = [{ id: 'plan', name: 'Aluguel', category: 'Moradia', kind: 'expense', defaultAmountCents: 200_000, amounts: { '2026-12': 0 }, startMonth: '2026-10', updatedAt: NOW.toISOString() }];
+  const data = addCategory(createEmptyData(NOW), 'Housing', NOW);
+  data.transactions = [{ id: 'purchase', fingerprint: 'purchase-occurrence-1', date: '2026-10-10', month: '2026-10', amountCents: -12_345, kind: 'expense', source: 'card', account: 'Card', originalDescription: 'Store', description: 'Purchase', category: '', sourceRow: 1, updatedAt: NOW.toISOString() }];
+  data.planItems = [{ id: 'plan', name: 'Rent', category: 'Housing', kind: 'expense', defaultAmountCents: 200_000, amounts: { '2026-12': 0 }, startMonth: '2026-10', updatedAt: NOW.toISOString() }];
   return data;
 }
 
 beforeEach(() => { memory.clear(); vi.stubGlobal('indexedDB', {}); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('validação de backup', () => {
-  it('aceita JSON válido com estorno e preserva centavos/zero explícito', () => {
+describe('backup validation', () => {
+  it('accepts valid JSON with refunds and preserves cents and explicit zero', () => {
     const data = fixture();
     data.transactions[0].amountCents = 345;
     expect(validateBackup(JSON.stringify(data))).toEqual(data);
   });
 
-  it('exporta somente os dados financeiros e mantém configuração original local', () => {
+  it('exports financial data only and keeps the original local configuration', () => {
     const data = fixture();
     data.settings.googleClientId = 'local-client-id';
     const withExtra = data as FinanceData & { token: string };
@@ -43,36 +43,36 @@ describe('validação de backup', () => {
   });
 
   it.each([
-    ['versão desconhecida', (data: any) => { data.version = 2; }],
-    ['centavos fracionários', (data: any) => { data.transactions[0].amountCents = 1.5; }],
-    ['centavos NaN', (data: any) => { data.transactions[0].amountCents = NaN; }],
-    ['centavos inseguros', (data: any) => { data.transactions[0].amountCents = Number.MAX_SAFE_INTEGER + 1; }],
-    ['dia inexistente', (data: any) => { data.transactions[0].date = '2026-02-30'; }],
-    ['mês inexistente', (data: any) => { data.transactions[0].month = '2026-13'; }],
-    ['timestamp impossível', (data: any) => { data.transactions[0].updatedAt = '2026-02-30T00:00:00.000Z'; }],
-    ['taxa infinita', (data: any) => { data.settings.monthlyReturnPercent = Infinity; }],
-    ['horizonte fracionário', (data: any) => { data.settings.horizonMonths = 1.5; }],
-    ['horizonte vazio', (data: any) => { data.settings.horizonMonths = 0; }],
-    ['mês da recorrência inválido', (data: any) => { data.planItems[0].amounts = { '2026-99': 100 }; }],
-    ['planejamento negativo', (data: any) => { data.planItems[0].defaultAmountCents = -1; }],
-    ['intervalo invertido', (data: any) => { data.planItems[0].endMonth = '2026-09'; }],
-    ['id duplicado', (data: any) => { data.transactions.push({ ...data.transactions[0] }); }],
-    ['objeto no lugar de lista', (data: any) => { data.transactions = {}; }],
-    ['descrição ausente', (data: any) => { delete data.transactions[0].description; }],
-    ['fonte inválida', (data: any) => { data.transactions[0].source = 'other'; }],
-    ['linha inválida', (data: any) => { data.transactions[0].sourceRow = -1; }],
-    ['timestamp exclusão inválido', (data: any) => { data.transactions[0].deletedAt = 'ontem'; }],
-  ])('recusa %s antes de restaurar', (_name, modify) => {
+    ['unknown version', (data: any) => { data.version = 2; }],
+    ['fractional cents', (data: any) => { data.transactions[0].amountCents = 1.5; }],
+    ['NaN cents', (data: any) => { data.transactions[0].amountCents = NaN; }],
+    ['unsafe cents', (data: any) => { data.transactions[0].amountCents = Number.MAX_SAFE_INTEGER + 1; }],
+    ['invalid day', (data: any) => { data.transactions[0].date = '2026-02-30'; }],
+    ['invalid month', (data: any) => { data.transactions[0].month = '2026-13'; }],
+    ['invalid timestamp', (data: any) => { data.transactions[0].updatedAt = '2026-02-30T00:00:00.000Z'; }],
+    ['infinite rate', (data: any) => { data.settings.monthlyReturnPercent = Infinity; }],
+    ['fractional horizon', (data: any) => { data.settings.horizonMonths = 1.5; }],
+    ['empty horizon', (data: any) => { data.settings.horizonMonths = 0; }],
+    ['invalid recurrence month', (data: any) => { data.planItems[0].amounts = { '2026-99': 100 }; }],
+    ['negative plan amount', (data: any) => { data.planItems[0].defaultAmountCents = -1; }],
+    ['reversed range', (data: any) => { data.planItems[0].endMonth = '2026-09'; }],
+    ['duplicate ID', (data: any) => { data.transactions.push({ ...data.transactions[0] }); }],
+    ['object instead of array', (data: any) => { data.transactions = {}; }],
+    ['missing description', (data: any) => { delete data.transactions[0].description; }],
+    ['invalid source', (data: any) => { data.transactions[0].source = 'other'; }],
+    ['invalid row', (data: any) => { data.transactions[0].sourceRow = -1; }],
+    ['invalid deletion timestamp', (data: any) => { data.transactions[0].deletedAt = 'yesterday'; }],
+  ])('rejects %s before restoring', (_name, modify) => {
     const data = fixture();
     modify(data);
     expect(() => validateBackup(data)).toThrow();
   });
 
-  it.each(['{', 'null', '[]', '"texto"'])('recusa JSON estruturalmente inválido %s', payload => {
+  it.each(['{', 'null', '[]', '"text"'])('rejects structurally invalid JSON: %s', payload => {
     expect(() => validateBackup(payload)).toThrow();
   });
 
-  it('aceita dia bissexto real e contribuição informativa', () => {
+  it('accepts valid leap days and informational contributions', () => {
     const data = fixture();
     data.transactions[0].date = '2024-02-29';
     data.planItems[0].kind = 'contribution';
@@ -82,8 +82,8 @@ describe('validação de backup', () => {
   });
 });
 
-describe('persistência local', () => {
-  it('migra todo o estado anterior sem apagar a cópia original', async () => {
+describe('local persistence', () => {
+  it('migrates the full legacy state without removing the original copy', async () => {
     const data = fixture();
     data.transactions[0].deletedAt = NOW.toISOString();
     data.settings.googleClientId = 'existing-client-id';
@@ -93,16 +93,16 @@ describe('persistência local', () => {
     expect(memory.get(`${LEGACY_DATABASE_NAME}/finance-data-v1`)).toEqual(data);
   });
 
-  it('prioriza os dados atuais e não repete a migração', async () => {
+  it('prioritizes current data without repeating migration', async () => {
     memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, fixture());
-    const current = addCategory(fixture(), 'Categoria atualizada', NOW);
-    current.transactions[0].category = 'Categoria atualizada';
+    const current = addCategory(fixture(), 'Updated category', NOW);
+    current.transactions[0].category = 'Updated category';
     await saveData(current);
     expect(await loadData()).toEqual(current);
     expect(memory.get(`${DATABASE_NAME}/finance-data-v1`)).toEqual(current);
   });
 
-  it('recusa dados anteriores inválidos antes de gravar no novo banco', async () => {
+  it('rejects invalid legacy data before writing to the new database', async () => {
     const invalid = fixture();
     invalid.transactions[0].amountCents = Infinity;
     memory.set(`${LEGACY_DATABASE_NAME}/finance-data-v1`, invalid);
@@ -111,7 +111,7 @@ describe('persistência local', () => {
     expect(memory.get(`${LEGACY_DATABASE_NAME}/finance-data-v1`)).toEqual(invalid);
   });
 
-  it('carrega instalação vazia e salva/carrega todo o estado incluindo tombstone', async () => {
+  it('loads an empty installation and round-trips the full state including tombstones', async () => {
     expect(await loadData()).toBeNull();
     const data = fixture();
     data.transactions[0].deletedAt = NOW.toISOString();
@@ -119,7 +119,7 @@ describe('persistência local', () => {
     expect(await loadData()).toEqual(data);
   });
 
-  it('não substitui dados bons quando um salvamento inválido falha', async () => {
+  it('does not replace valid data when an invalid save fails', async () => {
     const data = fixture();
     await saveData(data);
     const invalid = structuredClone(data);
@@ -128,8 +128,8 @@ describe('persistência local', () => {
     expect(await loadData()).toEqual(data);
   });
 
-  it('explica quando o navegador não oferece IndexedDB', async () => {
+  it('explains when the browser does not provide IndexedDB', async () => {
     vi.stubGlobal('indexedDB', undefined);
-    await expect(loadData()).rejects.toThrow('armazenamento local');
+    await expect(loadData()).rejects.toThrow('Local storage');
   });
 });

@@ -23,11 +23,11 @@ export function CategorySelect({ value, options, onChange, label, filter = false
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number }>({ left: 0, top: 0, width: 240, maxHeight: 300 });
   const choices = [
-    ...(filter ? [{ value: '', label: 'Todas as categorias' }, { value: '__empty', label: 'Sem categoria' }] : [{ value: '', label: 'Sem categoria' }]),
+    ...(filter ? [{ value: '', label: 'All categories' }, { value: '__empty', label: 'Uncategorized' }] : [{ value: '', label: 'Uncategorized' }]),
     ...options.map(name => ({ value: filter ? `category:${name}` : name, label: name })),
   ];
   const visible = choices.filter(option => searchKey(option.label).includes(searchKey(query.trim())));
-  const display = choices.find(option => option.value === value)?.label || value || 'Sem categoria';
+  const display = choices.find(option => option.value === value)?.label || value || 'Uncategorized';
 
   function close(restoreFocus = false) {
     setOpen(false); setQuery('');
@@ -79,12 +79,12 @@ export function CategorySelect({ value, options, onChange, label, filter = false
       if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); if (!open) show(); }
     }}><span>{display}</span><ChevronDown size={14} /></button>
     {open && createPortal(<div ref={popup} className="category-popup" style={position} onKeyDown={navigate}>
-      <div className="category-popup-search"><Search size={16} /><input ref={search} aria-label="Buscar categoria" aria-controls={`${id}-list`} aria-activedescendant={visible[active] ? `${id}-option-${active}` : undefined} autoComplete="off" placeholder="Buscar categoria…" value={query} onChange={event => { setQuery(event.target.value); setActive(0); }} /></div>
+      <div className="category-popup-search"><Search size={16} /><input ref={search} aria-label="Search categories" aria-controls={`${id}-list`} aria-activedescendant={visible[active] ? `${id}-option-${active}` : undefined} autoComplete="off" placeholder="Search categories…" value={query} onChange={event => { setQuery(event.target.value); setActive(0); }} /></div>
       <div id={`${id}-list`} role="listbox" aria-label={label} className="category-options">
         {visible.map((option, index) => <button type="button" tabIndex={-1} role="option" id={`${id}-option-${index}`} aria-selected={option.value === value} data-option-index={index} key={option.value} className={`category-option ${active === index ? 'highlighted' : ''}`} onPointerMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(index)}><span>{option.label}</span>{option.value === value && <Check size={14} />}</button>)}
-        {!visible.length && <p className="category-no-options">Nenhuma categoria encontrada.</p>}
+        {!visible.length && <p className="category-no-options">No categories found.</p>}
       </div>
-      <small className="category-popup-hint">Escolha uma categoria da lista.</small>
+      <small className="category-popup-hint">Choose a category from the list.</small>
     </div>, document.body)}
   </div>;
 }

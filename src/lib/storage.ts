@@ -5,17 +5,19 @@ import { categoryNameKey, normalizeCategoryData } from './categories';
 import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
 
 const DATA_KEY = 'finance-data-v1';
+// The original Portuguese store name is required to read existing local data.
+const DATA_STORE_NAME = 'dados';
 let financeStore: ReturnType<typeof createStore> | undefined;
 let legacyFinanceStore: ReturnType<typeof createStore> | undefined;
 function store() {
-  if (typeof indexedDB === 'undefined') throw new Error('Este navegador não disponibilizou o armazenamento local. Exporte um backup antes de fechar.');
-  return financeStore ??= createStore(DATABASE_NAME, 'dados');
+  if (typeof indexedDB === 'undefined') throw new Error('Local storage is unavailable in this browser. Export a backup before closing.');
+  return financeStore ??= createStore(DATABASE_NAME, DATA_STORE_NAME);
 }
 
 export async function loadData(): Promise<FinanceData | null> {
   const data = await get<unknown>(DATA_KEY, store());
   if (data !== undefined) return validateBackup(data);
-  const legacy = await get<unknown>(DATA_KEY, legacyFinanceStore ??= createStore(LEGACY_DATABASE_NAME, 'dados'));
+  const legacy = await get<unknown>(DATA_KEY, legacyFinanceStore ??= createStore(LEGACY_DATABASE_NAME, DATA_STORE_NAME));
   if (legacy === undefined) return null;
   const migrated = validateBackup(legacy);
   await set(DATA_KEY, migrated, store());
@@ -26,7 +28,7 @@ export async function saveData(data: FinanceData): Promise<void> {
   await set(DATA_KEY, validateBackup(data), store());
 }
 
-/** Um backup contém dados financeiros privados. Credenciais/configuração local ficam fora. */
+/** Backups contain private financial data. Credentials and local settings are excluded. */
 export function serializeBackup(data: FinanceData): string {
   const safe = validateBackup(data);
   safe.settings.googleClientId = '';
@@ -40,38 +42,38 @@ export const saveFinanceData = saveData;
 type JsonObject = Record<string, unknown>;
 
 function fail(path: string, message: string): never {
-  throw new Error(`Backup inválido: ${path} ${message}.`);
+  throw new Error(`Invalid backup: ${path} ${message}.`);
 }
 
 function object(value: unknown, path: string): JsonObject {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'deve ser um objeto');
-  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) fail(path, 'deve conter somente dados JSON');
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'must be an object');
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) fail(path, 'must contain only JSON data');
   return value as JsonObject;
 }
 
 function string(value: unknown, path: string, allowEmpty = true, maxLength = 20_000): string {
-  if (typeof value !== 'string' || (!allowEmpty && !value.trim()) || value.length > maxLength) fail(path, 'deve ser um texto válido');
+  if (typeof value !== 'string' || (!allowEmpty && !value.trim()) || value.length > maxLength) fail(path, 'must be valid text');
   return value as string;
 }
 
 function integer(value: unknown, path: string, minimum = -Number.MAX_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) fail(path, 'deve ser um inteiro dentro do intervalo permitido');
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) fail(path, 'must be an integer within the allowed range');
   return value as number;
 }
 
 function month(value: unknown, path: string): string {
-  if (!isValidMonth(value)) fail(path, 'deve ser um mês real no formato AAAA-MM');
+  if (!isValidMonth(value)) fail(path, 'must be a valid month in YYYY-MM format');
   return value;
 }
 
 function date(value: unknown, path: string): string {
-  if (!isValidDate(value)) fail(path, 'deve ser uma data real no formato AAAA-MM-DD');
+  if (!isValidDate(value)) fail(path, 'must be a valid date in YYYY-MM-DD format');
   return value;
 }
 
 function timestamp(value: unknown, path: string): string {
   const text = string(value, path, false, 40);
-  if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(text) || !isValidDate(text.slice(0, 10)) || !Number.isFinite(Date.parse(text))) fail(path, 'deve ser uma data e hora ISO válida');
+  if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(text) || !isValidDate(text.slice(0, 10)) || !Number.isFinite(Date.parse(text))) fail(path, 'must be a valid ISO date and time');
   return text;
 }
 
@@ -80,17 +82,17 @@ function optionalString(value: unknown, path: string): string | undefined {
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], path: string): T {
-  if (typeof value !== 'string' || !allowed.includes(value as T)) fail(path, `deve ser ${allowed.join(', ')}`);
+  if (typeof value !== 'string' || !allowed.includes(value as T)) fail(path, `must be ${allowed.join(', ')}`);
   return value as T;
 }
 
 function moneyMap(value: unknown, path: string, isMonthMap = false, nonnegative = false): Record<string, number> {
   const entries = Object.entries(object(value, path));
-  if (entries.length > 12_000) fail(path, 'contém entradas demais');
+  if (entries.length > 12_000) fail(path, 'contains too many entries');
   const result: Record<string, number> = {};
   for (const [key, amount] of entries) {
     if (isMonthMap) month(key, `${path}.${key}`);
-    else string(key, `${path}.categoria`, false, 500);
+    else string(key, `${path}.category`, false, 500);
     Object.defineProperty(result, key, { value: integer(amount, `${path}.${key}`, nonnegative ? 0 : -Number.MAX_SAFE_INTEGER), enumerable: true, writable: true, configurable: true });
   }
   return result;
@@ -132,7 +134,7 @@ function planItem(value: unknown, path: string): PlanItem {
   const source = object(value, path);
   const startMonth = month(source.startMonth, `${path}.startMonth`);
   const endMonth = source.endMonth === undefined ? undefined : month(source.endMonth, `${path}.endMonth`);
-  if (endMonth && endMonth < startMonth) fail(path, 'possui fim anterior ao início');
+  if (endMonth && endMonth < startMonth) fail(path, 'has an end month before its start month');
   return {
     ...recordBase(source, path), name: string(source.name, `${path}.name`, true, 2_000),
     category: string(source.category, `${path}.category`, true, 500),
@@ -170,10 +172,10 @@ function importBatch(value: unknown, path: string): ImportBatch {
 function category(value: unknown, path: string): Category {
   const source = object(value, path);
   const name = string(source.name, `${path}.name`, false, 500);
-  if (name !== name.normalize('NFC').trim().replace(/\s+/g, ' ')) fail(`${path}.name`, 'deve estar sem espaços excedentes');
+  if (name !== name.normalize('NFC').trim().replace(/\s+/g, ' ')) fail(`${path}.name`, 'must not contain excess whitespace');
   let aliases: string[] | undefined;
   if (source.aliases !== undefined) {
-    if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'deve ser uma lista de até 1000 nomes anteriores');
+    if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'must be a list of up to 1000 previous names');
     aliases = source.aliases.map((entry, index) => string(entry, `${path}.aliases[${index}]`, false, 500));
   }
   return {
@@ -189,9 +191,9 @@ function settings(value: unknown): Settings {
   const source = object(value, 'settings');
   const reserveStartMonth = month(source.reserveStartMonth, 'settings.reserveStartMonth');
   const horizonMonths = integer(source.horizonMonths, 'settings.horizonMonths', 1, 600);
-  try { addMonths(reserveStartMonth, horizonMonths - 1); } catch { fail('settings', 'possui horizonte fora do intervalo suportado'); }
+  try { addMonths(reserveStartMonth, horizonMonths - 1); } catch { fail('settings', 'has a horizon outside the supported range'); }
   const monthlyReturnPercent = source.monthlyReturnPercent;
-  if (typeof monthlyReturnPercent !== 'number' || !Number.isFinite(monthlyReturnPercent) || monthlyReturnPercent < -100 || monthlyReturnPercent > 100) fail('settings.monthlyReturnPercent', 'deve ser uma taxa finita entre -100 e 100');
+  if (typeof monthlyReturnPercent !== 'number' || !Number.isFinite(monthlyReturnPercent) || monthlyReturnPercent < -100 || monthlyReturnPercent > 100) fail('settings.monthlyReturnPercent', 'must be a finite rate between -100 and 100');
   return {
     initialReserveCents: integer(source.initialReserveCents, 'settings.initialReserveCents'),
     reserveStartMonth,
@@ -204,32 +206,32 @@ function settings(value: unknown): Settings {
 }
 
 function array<T extends { id: string }>(value: unknown, path: string, parse: (entry: unknown, entryPath: string) => T, maximum: number): T[] {
-  if (!Array.isArray(value) || value.length > maximum) fail(path, 'deve ser uma lista dentro do limite de tamanho');
+  if (!Array.isArray(value) || value.length > maximum) fail(path, 'must be a list within the size limit');
   const ids = new Set<string>();
   return value.map((entry, index) => {
     const record = parse(entry, `${path}[${index}]`);
-    if (ids.has(record.id)) fail(`${path}[${index}].id`, 'está duplicado');
+    if (ids.has(record.id)) fail(`${path}[${index}].id`, 'is duplicated');
     ids.add(record.id);
     return record;
   });
 }
 
-/** Valida todo o estado antes de restaurar ou consumir dados vindos da nuvem. */
+/** Validates the complete state before restoring or reading data from the cloud. */
 export function validateBackup(payload: unknown): FinanceData {
   let data = payload;
   if (typeof payload === 'string') {
-    if (payload.length > 50 * 1024 * 1024) fail('arquivo', 'excede 50 MB');
-    try { data = JSON.parse(payload); } catch { fail('arquivo', 'não contém JSON válido'); }
+    if (payload.length > 50 * 1024 * 1024) fail('file', 'exceeds 50 MB');
+    try { data = JSON.parse(payload); } catch { fail('file', 'does not contain valid JSON'); }
   }
-  const source = object(data, 'arquivo');
-  if (source.version !== 1) throw new Error('Versão de backup não suportada. Esta aplicação lê somente a versão 1.');
+  const source = object(data, 'file');
+  if (source.version !== 1) throw new Error('Unsupported backup version. This app reads only version 1.');
   const categories = source.categories === undefined ? [] : array(source.categories, 'categories', category, 12_000);
   const categoryLabels = new Map<string, string>();
   for (const record of categories) {
     for (const label of [record.name, ...(record.aliases ?? [])]) {
       const key = categoryNameKey(label);
       const otherId = categoryLabels.get(key);
-      if (otherId && otherId !== record.id) fail('categories', 'contém nomes duplicados');
+      if (otherId && otherId !== record.id) fail('categories', 'contains duplicate names');
       categoryLabels.set(key, record.id);
     }
   }
@@ -244,5 +246,5 @@ export function validateBackup(payload: unknown): FinanceData {
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
   try { return normalizeCategoryData(parsed, source.categories === undefined); }
-  catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contém uma categoria inválida'); }
+  catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid category'); }
 }

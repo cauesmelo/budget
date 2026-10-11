@@ -9,23 +9,23 @@ const LATER = new Date('2026-10-12T15:00:00.000Z');
 const AFTER = new Date('2026-10-13T15:00:00.000Z');
 const transaction = (id: string, patch: Partial<Transaction> = {}): Transaction => ({
   id, fingerprint: `fingerprint-${id}`, date: '2026-10-05', month: '2026-10',
-  amountCents: -1_000, kind: 'expense', source: 'budget', account: 'Histórico Budget',
-  originalDescription: 'Compra fictícia', description: 'Descrição legada', category: 'Mercado',
+  amountCents: -1_000, kind: 'expense', source: 'budget', account: 'Budget history',
+  originalDescription: 'Example purchase', description: 'Legacy description', category: 'Groceries',
   sourceRow: 7, updatedAt: NOW.toISOString(), ...patch,
 });
 function legacy(): ImportResult {
   return {
     source: 'budget',
-    transactions: [transaction('purchase'), transaction('other', { sourceRow: 8, originalDescription: 'Outra compra fictícia' })],
-    planItems: [{ id: 'plan', name: 'Despesas previstas', category: 'Mercado', kind: 'expense', defaultAmountCents: 900, amounts: { '2026-10': 500, '2026-11': 0, '2026-12': 900 }, startMonth: '2026-10', endMonth: '2026-12', updatedAt: NOW.toISOString() }],
-    snapshots: [{ id: 'snapshot-2026-10', month: '2026-10', incomeCents: 0, expenseCents: 2_000, categories: { Mercado: 2_000 }, updatedAt: NOW.toISOString() }],
+    transactions: [transaction('purchase'), transaction('other', { sourceRow: 8, originalDescription: 'Another example purchase' })],
+    planItems: [{ id: 'plan', name: 'Planned expenses', category: 'Groceries', kind: 'expense', defaultAmountCents: 900, amounts: { '2026-10': 500, '2026-11': 0, '2026-12': 900 }, startMonth: '2026-10', endMonth: '2026-12', updatedAt: NOW.toISOString() }],
+    snapshots: [{ id: 'snapshot-2026-10', month: '2026-10', incomeCents: 0, expenseCents: 2_000, categories: { Groceries: 2_000 }, updatedAt: NOW.toISOString() }],
     suggestedSettings: { initialReserveCents: 50_000, reserveStartMonth: '2026-10', horizonMonths: 3, googleClientId: 'ignored-client', updatedAt: '2000-01-01T00:00:00.000Z' },
     warnings: [],
   };
 }
 
-describe('carga única do Budget legado', () => {
-  it('alimenta histórico, planejamento e configuração padrão com um recibo persistente', () => {
+describe('one-time legacy Budget import', () => {
+  it('loads history, plans, and default settings with a persistent receipt', () => {
     const data = createEmptyData(NOW);
     data.settings.googleClientId = 'local-client';
     const result = legacy();
@@ -34,7 +34,7 @@ describe('carga única do Budget legado', () => {
     expect(next.imports).toEqual([{ id: INITIAL_IMPORT_ID, filename: 'budget.xlsx', source: 'budget', count: 4, importedAt: LATER.toISOString(), updatedAt: LATER.toISOString() }]);
     expect(next.transactions.every(item => item.importId === INITIAL_IMPORT_ID)).toBe(true);
     expect(next.settings).toMatchObject({ initialReserveCents: 50_000, horizonMonths: 3, googleClientId: 'local-client', updatedAt: LATER.toISOString() });
-    expect(next.categories.map(category => category.name)).toEqual(['Mercado']);
+    expect(next.categories.map(category => category.name)).toEqual(['Groceries']);
     expect(next.planItems[0].amounts['2026-11']).toBe(0);
     expect(planAmountForMonth(next.planItems[0], '2026-11')).toBe(0);
     expect(planAmountForMonth(next.planItems[0], '2027-01')).toBe(0);
@@ -44,9 +44,9 @@ describe('carga única do Budget legado', () => {
     expect(validateBackup(next)).toEqual(next);
   });
 
-  it('recusa outra fonte antes de alterar o estado', () => {
+  it('rejects other sources before changing state', () => {
     const data = createEmptyData(NOW);
-    expect(() => applyInitialImport(data, { ...legacy(), source: 'bank' }, 'extrato.xls', NOW)).toThrow('Budget legado');
+    expect(() => applyInitialImport(data, { ...legacy(), source: 'bank' }, 'statement.xls', NOW)).toThrow('legacy Budget');
     expect(data.imports).toEqual([]);
     expect(data.transactions).toEqual([]);
   });
@@ -57,7 +57,7 @@ describe('carga única do Budget legado', () => {
     { patch: { monthlyReturnPercent: 0.25 } },
     { patch: { horizonMonths: 18 } },
     { patch: { reserveStartMonth: '2026-09' } },
-  ])('preserva uma configuração financeira já ajustada: $patch', ({ patch }) => {
+  ])('preserves adjusted financial settings: $patch', ({ patch }) => {
     const data = createEmptyData(NOW);
     data.settings = { ...data.settings, ...patch, googleClientId: 'local-client' };
     const next = applyInitialImport(data, legacy(), 'budget.xlsx', LATER);
@@ -65,7 +65,7 @@ describe('carga única do Budget legado', () => {
     expect(next.planItems).toHaveLength(1);
   });
 
-  it.each(['plan', 'snapshot'] as const)('preserva a configuração financeira padrão quando já existe um %s', existing => {
+  it.each(['plan', 'snapshot'] as const)('preserves default financial settings when a %s already exists', existing => {
     const data = createEmptyData(NOW);
     const result = legacy();
     if (existing === 'plan') data.planItems = [{ ...result.planItems[0], category: '', deletedAt: LATER.toISOString() }];
@@ -75,12 +75,12 @@ describe('carga única do Budget legado', () => {
     expect(next.transactions).toHaveLength(2);
   });
 
-  it('conserva edições, exclusões e categorias anteriores, mesmo com fingerprint sob outro id', () => {
+  it('preserves edits, deletions, and previous categories even with a fingerprint under another ID', () => {
     const incoming = legacy();
-    const data = addCategory(createEmptyData(NOW), 'Minha categoria', NOW);
-    const edited = transaction('edited-id', { fingerprint: incoming.transactions[0].fingerprint, category: 'Minha categoria', description: 'Minha edição', updatedAt: LATER.toISOString() });
+    const data = addCategory(createEmptyData(NOW), 'My category', NOW);
+    const edited = transaction('edited-id', { fingerprint: incoming.transactions[0].fingerprint, category: 'My category', description: 'My edit', updatedAt: LATER.toISOString() });
     const deleted = { ...incoming.transactions[1], category: '', deletedAt: LATER.toISOString(), updatedAt: LATER.toISOString() };
-    const plan = { ...incoming.planItems[0], name: 'Plano editado', category: '', amounts: { '2026-11': 0 }, deletedAt: LATER.toISOString(), updatedAt: LATER.toISOString() };
+    const plan = { ...incoming.planItems[0], name: 'Edited plan', category: '', amounts: { '2026-11': 0 }, deletedAt: LATER.toISOString(), updatedAt: LATER.toISOString() };
     const snapshot = { ...incoming.snapshots[0], expenseCents: 0, categories: {}, updatedAt: LATER.toISOString() };
     data.transactions = [edited, deleted];
     data.planItems = [plan];
@@ -91,29 +91,29 @@ describe('carga única do Budget legado', () => {
     expect(next.snapshots).toEqual([snapshot]);
     expect(next.settings).toEqual(data.settings);
     expect(next.imports[0].count).toBe(0);
-    expect(next.categories.map(category => category.name)).toEqual(['Minha categoria']);
+    expect(next.categories.map(category => category.name)).toEqual(['My category']);
   });
 
-  it('usa o nome atual de categorias renomeadas e não reativa as arquivadas', () => {
-    let data = addCategory(createEmptyData(NOW), 'Mercado', NOW);
+  it('uses current category names without restoring archived options', () => {
+    let data = addCategory(createEmptyData(NOW), 'Groceries', NOW);
     const categoryId = data.categories[0].id;
-    data = renameCategory(data, categoryId, 'Supermercado', LATER);
+    data = renameCategory(data, categoryId, 'Supermarket', LATER);
     data = archiveCategory(data, categoryId, AFTER);
-    data = addCategory(data, 'Categoria sem uso', AFTER);
+    data = addCategory(data, 'Unused category', AFTER);
     const next = applyInitialImport(data, legacy(), 'budget.xlsx', AFTER);
-    expect(next.transactions.every(item => item.category === 'Supermercado')).toBe(true);
-    expect(next.planItems[0].category).toBe('Supermercado');
-    expect(next.snapshots[0].categories).toEqual({ Supermercado: 2_000 });
+    expect(next.transactions.every(item => item.category === 'Supermarket')).toBe(true);
+    expect(next.planItems[0].category).toBe('Supermarket');
+    expect(next.snapshots[0].categories).toEqual({ Supermarket: 2_000 });
     expect(next.categories.find(category => category.id === categoryId)).toEqual(data.categories.find(category => category.id === categoryId));
-    expect(availableCategoryNames(next)).toEqual(['Categoria sem uso']);
+    expect(availableCategoryNames(next)).toEqual(['Unused category']);
   });
 
-  it('não executa novamente nem após exclusões ou remoção dos registros', () => {
+  it('does not repeat the initial import after deleting or removing records', () => {
     const first = applyInitialImport(createEmptyData(NOW), legacy(), 'budget.xlsx', NOW);
-    first.transactions[0].description = 'Edição posterior';
+    first.transactions[0].description = 'Later edit';
     first.transactions[1].deletedAt = LATER.toISOString();
     const original = structuredClone(first);
-    expect(applyInitialImport(first, legacy(), 'outra-copia.xlsx', AFTER)).toBe(first);
+    expect(applyInitialImport(first, legacy(), 'another-copy.xlsx', AFTER)).toBe(first);
     expect(first).toEqual(original);
     first.transactions = [];
     first.planItems = [];
@@ -123,7 +123,7 @@ describe('carga única do Budget legado', () => {
     expect(first.imports).toHaveLength(1);
   });
 
-  it('leva o recibo no backup e na sincronização para impedir uma nova carga em outro navegador', () => {
+  it('includes the receipt in backups and syncs to prevent reseeding another browser', () => {
     const first = applyInitialImport(createEmptyData(NOW), legacy(), 'budget.xlsx', NOW);
     first.transactions[0].deletedAt = LATER.toISOString();
     first.transactions[0].updatedAt = LATER.toISOString();
@@ -138,8 +138,8 @@ describe('carga única do Budget legado', () => {
     expect(mergeFinanceData(restored, first).imports).toHaveLength(1);
   });
 
-  it('corrige a competência antiga preservando o id, as edições e o tombstone da linha', () => {
-    const existing = transaction('old-id', { date: '2026-09-29', month: '2026-09', category: '', description: 'Minha descrição', deletedAt: LATER.toISOString(), updatedAt: LATER.toISOString() });
+  it('corrects legacy competence while preserving IDs, edits, and tombstones', () => {
+    const existing = transaction('old-id', { date: '2026-09-29', month: '2026-09', category: '', description: 'My description', deletedAt: LATER.toISOString(), updatedAt: LATER.toISOString() });
     const corrected = transaction('correct-id', { date: '2026-09-29', month: '2026-10', fingerprint: existing.fingerprint });
     const data = createEmptyData(NOW);
     data.transactions = [existing];
@@ -153,8 +153,8 @@ describe('carga única do Budget legado', () => {
     expect(repeated.imports.at(-1)?.count).toBe(0);
   });
 
-  it('não escolhe uma competência quando a mesma posição e conteúdo aparecem em duas abas', () => {
-    const existing = transaction('old-id', { date: '2026-09-29', month: '2026-09', category: '', description: 'Minha edição' });
+  it('does not guess competence when the same row and content appear in two sheets', () => {
+    const existing = transaction('old-id', { date: '2026-09-29', month: '2026-09', category: '', description: 'My edit' });
     const first = transaction('first', { date: existing.date, month: '2026-10', fingerprint: existing.fingerprint });
     const second = transaction('second', { date: existing.date, month: '2026-11', fingerprint: 'second-occurrence' });
     const data = createEmptyData(NOW);
@@ -166,10 +166,10 @@ describe('carga única do Budget legado', () => {
     expect(next.imports[0].count).toBe(1);
   });
 
-  it('não corrige por similaridade linhas de outra conta, valor, posição ou competência editada', () => {
+  it('does not repair similar rows with different accounts, amounts, positions, or edited competence', () => {
     const original = transaction('original', { date: '2026-09-29', month: '2026-09', category: '' });
     const rows = [
-      { ...original, id: 'account', fingerprint: 'account', account: 'Outra conta fictícia' },
+      { ...original, id: 'account', fingerprint: 'account', account: 'Another example account' },
       { ...original, id: 'amount', fingerprint: 'amount', amountCents: -2_000 },
       { ...original, id: 'row', fingerprint: 'row', sourceRow: 8 },
       { ...original, id: 'edited-month', fingerprint: 'edited-month', month: '2026-08' },

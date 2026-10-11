@@ -30,8 +30,8 @@ function metadata(id: string, deviceId: string, modifiedTime = NOW, app = APP_ID
 function transaction(id: string, extra: Partial<Transaction> = {}): Transaction {
   return {
     id, fingerprint: id, date: '2026-10-11', month: '2026-10', amountCents: -1200,
-    kind: 'expense', source: 'manual', account: 'Conta', originalDescription: id,
-    description: id, category: 'Mercado', updatedAt: NOW, ...extra,
+    kind: 'expense', source: 'manual', account: 'Account', originalDescription: id,
+    description: id, category: 'Groceries', updatedAt: NOW, ...extra,
   };
 }
 function data(...entries: Transaction[]): FinanceData {
@@ -76,8 +76,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('autorização Google Drive', () => {
-  it('pede apenas appdata, não persiste tokens e revoga ao desconectar', async () => {
+describe('Google Drive authorization', () => {
+  it('requests only appdata, never persists tokens, and revokes on disconnect', async () => {
     await drive.connectDrive(CLIENT_ID);
     expect(authorize.scope).toBe(SCOPE);
     expect(authorize.include_granted_scopes).toBe(false);
@@ -88,43 +88,43 @@ describe('autorização Google Drive', () => {
     expect(revoke).toHaveBeenCalledWith('in-memory-token', expect.any(Function));
   });
 
-  it('expira a sessão e não inicia requests com token expirado', async () => {
+  it('expires the session and does not start requests with an expired token', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW));
     await drive.connectDrive(CLIENT_ID);
     vi.advanceTimersByTime(3_590_000);
     expect(drive.isDriveConnected()).toBe(false);
-    await expect(drive.syncDrive(data())).rejects.toThrow('expirou');
+    await expect(drive.syncDrive(data())).rejects.toThrow('expired');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('informa fechamento e timeout sem deixar uma sessão pendente', async () => {
+  it('reports popup closure and timeout without leaving a pending session', async () => {
     tokenResponse = undefined;
     const closed = drive.connectDrive(CLIENT_ID);
     await Promise.resolve();
     authorize.error_callback({ type: 'popup_closed' });
-    await expect(closed).rejects.toThrow('fechada');
+    await expect(closed).rejects.toThrow('closed');
     vi.useFakeTimers();
     const waiting = drive.connectDrive(CLIENT_ID);
-    const rejected = expect(waiting).rejects.toThrow('expirou');
+    const rejected = expect(waiting).rejects.toThrow('timed out');
     await vi.advanceTimersByTimeAsync(60_000);
     await rejected;
     expect(drive.isDriveConnected()).toBe(false);
   });
 
-  it('recusa uma autorização sem o escopo solicitado', async () => {
+  it('rejects authorization without the requested scope', async () => {
     tokenResponse = { access_token: 'other-token', expires_in: 3600, scope: 'openid' };
-    await expect(drive.connectDrive(CLIENT_ID)).rejects.toThrow('pasta própria');
+    await expect(drive.connectDrive(CLIENT_ID)).rejects.toThrow('app folder');
     expect(drive.isDriveConnected()).toBe(false);
   });
 });
 
 describe('snapshots append-only', () => {
-  it('sincroniza catálogo, renomes e arquivamento sem ressuscitar categorias de backups antigos', async () => {
+  it('syncs catalogs, renames, and archives without reviving categories from old backups', async () => {
     await drive.connectDrive(CLIENT_ID);
     let local = data(transaction('local-purchase'));
-    const categoryId = local.categories.find(category => category.name === 'Mercado')!.id;
-    local = renameCategory(local, categoryId, 'Supermercado', new Date('2026-10-12T20:00:00.000Z'));
+    const categoryId = local.categories.find(category => category.name === 'Groceries')!.id;
+    local = renameCategory(local, categoryId, 'Supermarket', new Date('2026-10-12T20:00:00.000Z'));
     local = archiveCategory(local, categoryId, new Date('2026-10-13T20:00:00.000Z'));
     const previous = data(transaction('previous-purchase'));
     const { categories: _catalog, ...legacyBackup } = previous;
@@ -135,19 +135,19 @@ describe('snapshots append-only', () => {
       return response({ files: [metadata('previous-backup', 'other-device')] });
     });
     const result = await drive.syncDrive(local);
-    expect(result.data.transactions.map(entry => entry.category)).toEqual(['Supermercado', 'Supermercado']);
+    expect(result.data.transactions.map(entry => entry.category)).toEqual(['Supermarket', 'Supermarket']);
     expect(result.data.transactions.map(entry => entry.amountCents)).toEqual([-1200, -1200]);
     expect(result.data.categories).toHaveLength(1);
     expect(result.data.categories[0].archivedAt).toBe('2026-10-13T20:00:00.000Z');
-    expect(availableCategoryNames(result.data)).not.toContain('Supermercado');
+    expect(availableCategoryNames(result.data)).not.toContain('Supermarket');
     expect(uploadedData().categories).toEqual(result.data.categories);
   });
 
-  it('pagina, escolhe o último de cada dispositivo e reúne dados antes de criar um arquivo', async () => {
+  it('paginates, selects the latest snapshot per device, and merges data before creating a file', async () => {
     await drive.connectDrive(CLIENT_ID);
     stored.set(DEVICE_STORAGE_KEY, 'local-device');
     const local = data(transaction('local'), transaction('shared'));
-    const remoteA = data(transaction('device-a'), transaction('shared', { category: 'Apagado', deletedAt: '2026-10-12T20:00:00.000Z' }));
+    const remoteA = data(transaction('device-a'), transaction('shared', { category: 'Deleted', deletedAt: '2026-10-12T20:00:00.000Z' }));
     const remoteB = data(transaction('device-b'));
     const downloaded: string[] = [];
     fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
@@ -183,16 +183,16 @@ describe('snapshots append-only', () => {
     expect(fetchMock.mock.calls.some(([, options]) => ['PATCH', 'DELETE', 'PUT'].includes(options?.method ?? ''))).toBe(false);
   });
 
-  it('não envia dados quando o último backup de qualquer dispositivo está inválido', async () => {
+  it('does not upload when any device has an invalid latest backup', async () => {
     await drive.connectDrive(CLIENT_ID);
     fetchMock.mockResolvedValueOnce(response({ files: [metadata('corrupt', 'other-device')] })).mockResolvedValueOnce(response({ version: 1, transactions: 'invalid' }));
     const local = data(transaction('preserved'));
-    await expect(drive.syncDrive(local)).rejects.toThrow('Nenhum dado novo foi enviado');
+    await expect(drive.syncDrive(local)).rejects.toThrow('No new data was uploaded');
     expect(local.transactions[0].id).toBe('preserved');
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
   });
 
-  it('cria nomes únicos e conserva o ID do dispositivo entre sincronizações', async () => {
+  it('creates unique names and preserves the device ID between syncs', async () => {
     await drive.connectDrive(CLIENT_ID);
     fetchMock.mockImplementation(async (_url: string, options?: RequestInit) => options?.method === 'POST'
       ? response({ id: crypto.randomUUID(), modifiedTime: NOW }) : response({ files: [] }));
@@ -212,7 +212,7 @@ describe('snapshots append-only', () => {
     expect([...stored.values()]).not.toContain('in-memory-token');
   });
 
-  it('preserva o ID anterior e reconhece backups antigos ao publicar com o novo nome', async () => {
+  it('preserves the legacy ID and recognizes old backups after renaming the app', async () => {
     await drive.connectDrive(CLIENT_ID);
     stored.set(LEGACY_DEVICE_STORAGE_KEY, 'existing-device');
     const remote = data(transaction('previous-purchase'));
@@ -233,45 +233,45 @@ describe('snapshots append-only', () => {
     expect(stored.get(LEGACY_DEVICE_STORAGE_KEY)).toBe('existing-device');
   });
 
-  it('não continua uma sync enfileirada se a conexão mudou enquanto aguardava outra aba', async () => {
+  it('does not resume a queued sync after the connection changes while waiting for another tab', async () => {
     await drive.connectDrive(CLIENT_ID);
     let release: (() => Promise<{ data: FinanceData; syncedAt: string }>) | undefined;
     vi.stubGlobal('navigator', { locks: { request: (_name: string, _options: { signal: AbortSignal }, callback: () => Promise<{ data: FinanceData; syncedAt: string }>) => new Promise((resolve, reject) => { release = async () => { try { const result = await callback(); resolve(result); return result; } catch (error) { reject(error); throw error; } }; }) } });
     const pending = drive.syncDrive(data());
     drive.disconnectDrive();
     await drive.connectDrive(CLIENT_ID);
-    const rejected = expect(pending).rejects.toThrow('cancelada');
-    await expect(release!()).rejects.toThrow('conexão com o Google mudou');
+    const rejected = expect(pending).rejects.toThrow('canceled');
+    await expect(release!()).rejects.toThrow('Google connection changed');
     await rejected;
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('informa falhas HTTP e invalida uma sessão recusada pelo Google', async () => {
+  it('reports HTTP failures and invalidates sessions rejected by Google', async () => {
     await drive.connectDrive(CLIENT_ID);
     fetchMock.mockResolvedValueOnce(response({ error: { message: 'never shown' } }, 401));
-    await expect(drive.syncDrive(data())).rejects.toThrow('Conecte novamente');
+    await expect(drive.syncDrive(data())).rejects.toThrow('Reconnect');
     expect(drive.isDriveConnected()).toBe(false);
     await drive.connectDrive(CLIENT_ID);
     fetchMock.mockResolvedValueOnce(response({}, 429));
-    await expect(drive.syncDrive(data())).rejects.toThrow('limite temporário');
+    await expect(drive.syncDrive(data())).rejects.toThrow('temporary usage limit');
   });
 
-  it('permite cancelar a espera por outra aba sem iniciar requests', async () => {
+  it('cancels waiting for another tab without starting requests', async () => {
     await drive.connectDrive(CLIENT_ID);
     vi.stubGlobal('navigator', { locks: { request: (_name: string, options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
       options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
     }) } });
     const pending = drive.syncDrive(data());
-    const rejected = expect(pending).rejects.toThrow('cancelada');
+    const rejected = expect(pending).rejects.toThrow('canceled');
     drive.disconnectDrive();
     await rejected;
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('traduz resposta JSON inválida e não publica um backup nessa situação', async () => {
+  it('reports invalid JSON responses without uploading a backup', async () => {
     await drive.connectDrive(CLIENT_ID);
     fetchMock.mockResolvedValueOnce(new Response('not JSON'));
-    await expect(drive.syncDrive(data())).rejects.toThrow('resposta inválida');
+    await expect(drive.syncDrive(data())).rejects.toThrow('invalid response');
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
   });
 });

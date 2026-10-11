@@ -44,21 +44,21 @@ export function CategoryManager({ data, onEdit, onClose }: CategoryManagerProps)
   function perform(edit: (current: FinanceData) => FinanceData, message: string) {
     setError(''); setStatus('');
     try {
-      if (!onEdit(edit)) { setError('Não foi possível salvar a categoria. Confira os dados e tente novamente.'); return false; }
+      if (!onEdit(edit)) { setError('Could not save the category. Check your data and try again.'); return false; }
       setStatus(message); return true;
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Confira o nome da categoria.'); return false; }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Check the category name.'); return false; }
   }
 
   return <div className="modal-backdrop category-manager-backdrop" onClick={onClose}><div ref={panel} className="modal panel category-manager" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} onClick={event => event.stopPropagation()}>
-    <div className="panel-header"><div><h2 id={`${id}-title`}>Gerenciar categorias</h2><p>{activeCount} disponíveis para seus lançamentos e planejamento</p></div><button className="icon-button" aria-label="Fechar gerenciamento de categorias" onClick={onClose}><X size={20} /></button></div>
-    <p className="category-manager-intro">Crie as opções que fazem sentido para você. Renomear atualiza os registros; arquivar mantém o histórico e retira a opção dos novos lançamentos.</p>
-    <form className="category-create" onSubmit={event => { event.preventDefault(); if (perform(current => addCategory(current, newName), 'Categoria criada.')) { setNewName(''); nameInput.current?.focus(); } }}>
-      <label className="field"><span>Nova categoria</span><input ref={nameInput} aria-label="Nome da nova categoria" autoComplete="off" placeholder="Ex.: Alimentação" value={newName} maxLength={200} onChange={event => setNewName(event.target.value)} /></label>
-      <button type="submit" className="button"><Plus size={16} /> Criar categoria</button>
+    <div className="panel-header"><div><h2 id={`${id}-title`}>Manage categories</h2><p>{activeCount} available for transactions and planning</p></div><button className="icon-button" aria-label="Close category manager" onClick={onClose}><X size={20} /></button></div>
+    <p className="category-manager-intro">Create categories that work for you. Renaming updates existing records; archiving preserves history and removes the category from new transactions.</p>
+    <form className="category-create" onSubmit={event => { event.preventDefault(); if (perform(current => addCategory(current, newName), 'Category created.')) { setNewName(''); nameInput.current?.focus(); } }}>
+      <label className="field"><span>New category</span><input ref={nameInput} aria-label="New category name" autoComplete="off" placeholder="e.g., Food" value={newName} maxLength={200} onChange={event => setNewName(event.target.value)} /></label>
+      <button type="submit" className="button"><Plus size={16} /> Create category</button>
     </form>
     {error && <div role="alert" className="alert error">{error}</div>}
     {status && <div role="status" className="alert success"><Check size={16} />{status}</div>}
-    <div className="category-manager-filters"><div className="search"><Search size={16} /><input aria-label="Buscar categoria cadastrada" placeholder="Buscar categoria" value={query} onChange={event => setQuery(event.target.value)} /></div><label className="category-archived-toggle"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} /> Mostrar arquivadas</label></div>
+    <div className="category-manager-filters"><div className="search"><Search size={16} /><input aria-label="Search existing categories" placeholder="Search categories" value={query} onChange={event => setQuery(event.target.value)} /></div><label className="category-archived-toggle"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} /> Show archived</label></div>
     <div className="managed-category-list">
       {visible.map(category => {
         const names = new Set([category.name, ...(category.aliases || [])]);
@@ -67,14 +67,14 @@ export function CategoryManager({ data, onEdit, onClose }: CategoryManagerProps)
         return <div className={`managed-category-row ${category.archivedAt ? 'archived' : ''}`} key={category.id}>
           <div className="managed-category-icon"><Tag size={17} /></div>
           <div className="managed-category-details">
-            {editing === category.id ? <form className="category-rename" onSubmit={event => { event.preventDefault(); if (perform(current => renameCategory(current, category.id, draft), 'Categoria renomeada.')) setEditing(null); }}><input aria-label={`Novo nome de ${category.name}`} autoFocus value={draft} maxLength={200} onChange={event => setDraft(event.target.value)} /><button type="submit" className="icon-button" aria-label={`Salvar nome de ${category.name}`} title="Salvar nome"><Check size={17} /></button><button type="button" className="icon-button" aria-label="Cancelar renomeação" onClick={() => { setEditing(null); setError(''); }}><X size={17} /></button></form> : <strong>{category.name}</strong>}
-            <small>{transactions} {transactions === 1 ? 'lançamento' : 'lançamentos'} · {plans} {plans === 1 ? 'item no plano' : 'itens no plano'}{category.archivedAt && <span className="category-archived-badge">Arquivada</span>}</small>
+            {editing === category.id ? <form className="category-rename" onSubmit={event => { event.preventDefault(); if (perform(current => renameCategory(current, category.id, draft), 'Category renamed.')) setEditing(null); }}><input aria-label={`New name for ${category.name}`} autoFocus value={draft} maxLength={200} onChange={event => setDraft(event.target.value)} /><button type="submit" className="icon-button" aria-label={`Save name for ${category.name}`} title="Save name"><Check size={17} /></button><button type="button" className="icon-button" aria-label="Cancel renaming" onClick={() => { setEditing(null); setError(''); }}><X size={17} /></button></form> : <strong>{category.name}</strong>}
+            <small>{transactions} {transactions === 1 ? 'transaction' : 'transactions'} · {plans} {plans === 1 ? 'plan item' : 'plan items'}{category.archivedAt && <span className="category-archived-badge">Archived</span>}</small>
           </div>
-          {editing !== category.id && <div className="managed-category-actions"><button type="button" className="icon-button" aria-label={`Renomear ${category.name}`} title="Renomear" onClick={() => { setEditing(category.id); setDraft(category.name); setError(''); setStatus(''); }}><Pencil size={16} /></button>{category.archivedAt ? <button type="button" className="icon-button" aria-label={`Reativar ${category.name}`} title="Reativar" onClick={() => perform(current => restoreCategory(current, category.id), 'Categoria reativada.')}><RotateCcw size={16} /></button> : <button type="button" className="icon-button" aria-label={`Arquivar ${category.name}`} title="Arquivar" onClick={() => perform(current => archiveCategory(current, category.id), 'Categoria arquivada. Seus registros foram preservados.')}><Archive size={16} /></button>}</div>}
+          {editing !== category.id && <div className="managed-category-actions"><button type="button" className="icon-button" aria-label={`Rename ${category.name}`} title="Rename" onClick={() => { setEditing(category.id); setDraft(category.name); setError(''); setStatus(''); }}><Pencil size={16} /></button>{category.archivedAt ? <button type="button" className="icon-button" aria-label={`Restore ${category.name}`} title="Restore" onClick={() => perform(current => restoreCategory(current, category.id), 'Category restored.')}><RotateCcw size={16} /></button> : <button type="button" className="icon-button" aria-label={`Archive ${category.name}`} title="Archive" onClick={() => perform(current => archiveCategory(current, category.id), 'Category archived. Your records were preserved.')}><Archive size={16} /></button>}</div>}
         </div>;
       })}
-      {!visible.length && <div className="category-manager-empty"><Tag size={24} /><p>{query ? 'Nenhuma categoria neste filtro.' : showArchived ? 'Crie sua primeira categoria acima.' : 'Nenhuma categoria disponível. Crie uma opção ou mostre as arquivadas.'}</p></div>}
+      {!visible.length && <div className="category-manager-empty"><Tag size={24} /><p>{query ? 'No categories match this filter.' : showArchived ? 'Create your first category above.' : 'No categories available. Create one or show archived categories.'}</p></div>}
     </div>
-    <div className="category-manager-footer"><small>As categorias acompanham seus backups e a sincronização.</small><button type="button" className="button secondary" onClick={onClose}>Concluir</button></div>
+    <div className="category-manager-footer"><small>Categories are included in backups and sync.</small><button type="button" className="button secondary" onClick={onClose}>Done</button></div>
   </div></div>;
 }

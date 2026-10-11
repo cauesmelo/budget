@@ -9,8 +9,8 @@ import { addMonths, applyImport, createEmptyData, isValidDate, projectReserve } 
 const directory = process.env.PRIVATE_IMPORT_DIR;
 const files = {
   budget: process.env.PRIVATE_BUDGET_FILE || 'budget.xlsx',
-  bank: process.env.PRIVATE_BANK_FILE || 'extrato.xls',
-  card: process.env.PRIVATE_CARD_FILE || 'fatura.xlsx',
+  bank: process.env.PRIVATE_BANK_FILE || 'statement.xls',
+  card: process.env.PRIVATE_CARD_FILE || 'invoice.xlsx',
 };
 async function readImport(filename: string) {
   const bytes = await readFile(join(directory!, filename));

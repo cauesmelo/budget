@@ -1,37 +1,37 @@
-# Logo do Budget
+# Budget logo
 
-![Logo horizontal](../public/brand/budget-app-preview.png)
+![Horizontal logo](../public/brand/budget-app-preview.png)
 
-A identidade segue a referência escolhida pelo usuário: folha de traço fino, nome `budget` em Manrope e ponto verde. O SVG horizontal já é usado na aplicação. Na barra lateral compacta, aparece somente a folha; o favicon e o ícone instalável também usam esse símbolo.
+The identity follows the reference selected by the user: a thin outlined leaf, the name `budget` in Manrope, and a green dot. The horizontal SVG is used in the application. The compact sidebar displays only the leaf; the favicon and installable application icon also use this symbol.
 
-## Arquivos
+## Files
 
-| Uso | Arquivo | Formato |
+| Use | File | Format |
 | --- | --- | --- |
-| Aplicação, logo principal | [budget-app.svg](../public/brand/budget-app.svg) | SVG transparente, com Manrope incorporada |
-| Logo horizontal para outras aplicações | [budget-app.png](../public/brand/budget-app.png) | PNG transparente, 834 × 228 px |
-| Prévia sobre fundo verde | [budget-app-preview.png](../public/brand/budget-app-preview.png) | PNG, 834 × 228 px |
-| Folha isolada | [budget-leaf.svg](../public/brand/budget-leaf.svg) | SVG transparente |
-| Upload no Google | [budget-google-120.png](../public/brand/budget-google-120.png) | PNG, 120 × 120 px, menos de 1 MB |
-| Ícone em resolução maior | [budget-google-512.png](../public/brand/budget-google-512.png) | PNG, 512 × 512 px |
-| Ícone quadrado em vetor | [budget-google.svg](../public/brand/budget-google.svg) | SVG com fundo verde |
+| Application, main logo | [budget-app.svg](../public/brand/budget-app.svg) | Transparent SVG with embedded Manrope |
+| Horizontal logo for other applications | [budget-app.png](../public/brand/budget-app.png) | Transparent PNG, 834 × 228 px |
+| Preview on a green background | [budget-app-preview.png](../public/brand/budget-app-preview.png) | PNG, 834 × 228 px |
+| Standalone leaf | [budget-leaf.svg](../public/brand/budget-leaf.svg) | Transparent SVG |
+| Google upload | [budget-google-120.png](../public/brand/budget-google-120.png) | PNG, 120 × 120 px, under 1 MB |
+| Higher-resolution icon | [budget-google-512.png](../public/brand/budget-google-512.png) | PNG, 512 × 512 px |
+| Square vector icon | [budget-google.svg](../public/brand/budget-google.svg) | SVG with a green background |
 
-No Google Cloud, abra **Google Auth Platform → Branding → App logo** e envie `budget-google-120.png`. O Google recomenda imagem quadrada de 120 × 120 px, com até 1 MB, nos formatos PNG, JPG ou BMP. [Requisitos oficiais](https://support.google.com/cloud/answer/15549049?hl=en-GB).
+In Google Cloud, open **Google Auth Platform → Branding → App logo** and upload `budget-google-120.png`. Google recommends a square image of 120 × 120 px, up to 1 MB, in PNG, JPG, or BMP format. [Official requirements](https://support.google.com/cloud/answer/15549049?hl=en-GB).
 
-## Cores e fonte
+## Colors and font
 
-| Elemento | Cor |
+| Element | Color |
 | --- | --- |
-| Fundo verde escuro | `#142b29` |
-| Nome em branco suave | `#f5f8ed` |
-| Folha em verde claro | `#cee9b5` |
-| Ponto verde | `#a5cd8a` |
+| Dark green background | `#142b29` |
+| Soft white name | `#f5f8ed` |
+| Light green leaf | `#cee9b5` |
+| Green dot | `#a5cd8a` |
 
-A fonte é Manrope 600, a mesma face carregada na marca original do aplicativo. O SVG incorpora a fonte para preservar o desenho sem exigir instalação de fontes no computador.
+The font is Manrope 600, the same face used in the original application brand. The SVG embeds the font to preserve the design without requiring fonts to be installed on the computer.
 
-Os arquivos foram construídos diretamente em SVG, usando a fonte e o traço de folha já presentes no projeto. Os PNGs são exportações desses vetores pelo navegador.
+The files were created directly in SVG using the font and leaf outline already present in the project. The PNGs are browser exports of those vectors.
 
-## Licenças
+## Licenses
 
 - Manrope: [SIL Open Font License 1.1](brand-licenses/Manrope-OFL.txt).
-- Folha Lucide: [ISC/MIT](brand-licenses/Lucide-LICENSE.txt).
+- Lucide leaf: [ISC/MIT](brand-licenses/Lucide-LICENSE.txt).

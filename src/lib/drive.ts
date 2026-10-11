@@ -53,7 +53,7 @@ function loadGoogle(): Promise<GoogleOauth> {
   if (googleLoader) return googleLoader;
   googleLoader = new Promise((resolve, reject) => {
     if (typeof document === 'undefined') {
-      reject(new Error('A conexão com o Google Drive precisa de um navegador.'));
+      reject(new Error('Connecting to Google Drive requires a browser.'));
       return;
     }
     const scriptId = `${APP_ID}-google-identity`;
@@ -70,12 +70,12 @@ function loadGoogle(): Promise<GoogleOauth> {
       if (error || !oauth) {
         // A later button click can try loading the library again.
         if (!existing) script.remove();
-        reject(error ?? new Error('Não foi possível iniciar a conexão com o Google.'));
+        reject(error ?? new Error('Could not initialize the Google connection.'));
       } else resolve(oauth);
     };
     const onLoad = () => finish();
-    const onError = () => finish(new Error('Não foi possível carregar o Google. Verifique sua internet e tente novamente.'));
-    const timer = setTimeout(() => finish(new Error('O Google demorou para carregar. Verifique sua conexão e tente novamente.')), 15_000);
+    const onError = () => finish(new Error('Could not load Google. Check your internet connection and try again.'));
+    const timer = setTimeout(() => finish(new Error('Google took too long to load. Check your connection and try again.')), 15_000);
     script.addEventListener('load', onLoad);
     script.addEventListener('error', onError);
     if (!existing) {
@@ -98,18 +98,18 @@ export function isDriveConnected(): boolean {
 export async function connectDrive(clientId: string): Promise<void> {
   const cleanId = clientId.trim();
   if (!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(cleanId)) {
-    throw new Error('Informe o Client ID OAuth da aplicação Web, terminado em .apps.googleusercontent.com.');
+    throw new Error('Enter the OAuth Client ID for the Web application, ending in .apps.googleusercontent.com.');
   }
   if (connection) {
     if (connection.clientId === cleanId) return connection.promise;
-    throw new Error('Já existe uma autorização em andamento. Aguarde ou desconecte antes de trocar o Client ID.');
+    throw new Error('Authorization is already in progress. Wait or disconnect before changing the Client ID.');
   }
   if (isDriveConnected() && session?.clientId === cleanId) return;
   if (session) disconnectDrive();
   const generation = ++authGeneration;
   const promise = (async () => {
     const oauth = await loadGoogle();
-    if (generation !== authGeneration) throw new Error('A conexão com o Google foi cancelada.');
+    if (generation !== authGeneration) throw new Error('The Google connection was canceled.');
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       const finish = (error?: Error) => {
@@ -119,8 +119,8 @@ export async function connectDrive(clientId: string): Promise<void> {
         cancelAuthorization = undefined;
         if (error) reject(error); else resolve();
       };
-      const timer = setTimeout(() => finish(new Error('A autorização do Google expirou. Clique em conectar e conclua a janela de autorização.')), 60_000);
-      cancelAuthorization = () => finish(new Error('A conexão com o Google foi cancelada.'));
+      const timer = setTimeout(() => finish(new Error('Google authorization timed out. Click connect and complete the authorization window.')), 60_000);
+      cancelAuthorization = () => finish(new Error('The Google connection was canceled.'));
       try {
         const tokenClient = oauth.initTokenClient({
           client_id: cleanId,
@@ -130,17 +130,17 @@ export async function connectDrive(clientId: string): Promise<void> {
             if (settled || generation !== authGeneration) return;
             if (response.error) {
               finish(new Error(response.error === 'access_denied'
-                ? 'Você não autorizou o acesso à pasta do aplicativo no Drive.'
-                : 'O Google recusou a autorização. Confira o Client ID e as origens cadastradas no Google Cloud.'));
+                ? 'Access to the app folder in Drive was not authorized.'
+                : 'Google denied authorization. Check the Client ID and origins configured in Google Cloud.'));
               return;
             }
             const lifetime = Number(response.expires_in) * 1000;
             if (!response.access_token || !Number.isFinite(lifetime) || lifetime <= 0 || lifetime > 86_400_000) {
-              finish(new Error('O Google não retornou uma autorização válida. Tente conectar novamente.'));
+              finish(new Error('Google did not return a valid authorization. Try connecting again.'));
               return;
             }
             if (!oauth.hasGrantedAllScopes(response, DRIVE_SCOPE)) {
-              finish(new Error('Autorize a pasta própria do aplicativo para sincronizar com o Drive.'));
+              finish(new Error('Authorize the app folder to sync with Drive.'));
               return;
             }
             session = {
@@ -152,12 +152,12 @@ export async function connectDrive(clientId: string): Promise<void> {
             finish();
           },
           error_callback: error => finish(new Error(error.type === 'popup_closed'
-            ? 'A janela do Google foi fechada antes de concluir a conexão.'
-            : 'A janela do Google não abriu. Permita pop-ups para este aplicativo e clique em conectar novamente.')),
+            ? 'The Google window was closed before the connection was completed.'
+            : 'The Google window did not open. Allow pop-ups for this app and click connect again.')),
         });
         tokenClient.requestAccessToken({ prompt: '' });
       } catch {
-        finish(new Error('Não foi possível abrir a autorização do Google. Tente conectar novamente.'));
+        finish(new Error('Could not open Google authorization. Try connecting again.'));
       }
     });
   })();
@@ -181,14 +181,14 @@ export function disconnectDrive(): void {
 function requireSession(): DriveSession {
   if (!isDriveConnected() || !session) {
     session = undefined;
-    throw new Error('A autorização do Google expirou ou está desconectada. Clique em conectar novamente; seus dados locais estão salvos.');
+    throw new Error('Google authorization expired or is disconnected. Click connect again; your local data is saved.');
   }
   return session;
 }
 
 async function readText(response: Response): Promise<string> {
   const length = Number(response.headers.get('Content-Length'));
-  if (length > MAX_SNAPSHOT_BYTES) throw new Error('O backup no Drive supera o limite de 25 MB por arquivo.');
+  if (length > MAX_SNAPSHOT_BYTES) throw new Error('The Drive backup exceeds the 25 MB limit per file.');
   if (!response.body) return '';
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -201,7 +201,7 @@ async function readText(response: Response): Promise<string> {
       bytes += chunk.value.byteLength;
       if (bytes > MAX_SNAPSHOT_BYTES) {
         await reader.cancel();
-        throw new Error('O backup no Drive supera o limite de 25 MB por arquivo.');
+        throw new Error('The Drive backup exceeds the 25 MB limit per file.');
       }
       result += decoder.decode(chunk.value, { stream: true });
     }
@@ -220,26 +220,26 @@ async function driveRequest(url: string, options: RequestInit = {}): Promise<str
     headers.set('Authorization', `Bearer ${authorized.token}`);
     const response = await fetch(url, { ...options, headers, signal: controller.signal, cache: 'no-store' });
     const body = await readText(response);
-    if (session !== authorized) throw new Error('A conexão com o Drive foi encerrada.');
+    if (session !== authorized) throw new Error('The Drive connection was closed.');
     if (!response.ok) {
       if (response.status === 401) {
         session = undefined;
-        throw new Error('O Google encerrou a autorização. Conecte novamente para sincronizar.');
+        throw new Error('Google ended the authorization. Reconnect to sync.');
       }
       let reason = '';
       try { reason = JSON.parse(body)?.error?.errors?.[0]?.reason ?? ''; } catch { /* No response text is exposed. */ }
       if (response.status === 429 || /rateLimit|quota|dailyLimit/i.test(reason)) {
-        throw new Error('O Drive atingiu um limite temporário de uso. Aguarde alguns minutos e sincronize novamente.');
+        throw new Error('Drive reached a temporary usage limit. Wait a few minutes and sync again.');
       }
-      if (response.status === 403) throw new Error('O Drive recusou o acesso. Confira se a API está habilitada e se a pasta do aplicativo foi autorizada.');
-      if (response.status === 404) throw new Error('Um backup não foi encontrado no Drive. Ele pode ter sido removido; sincronize novamente.');
-      throw new Error(`Não foi possível sincronizar com o Drive (HTTP ${response.status}). Seus dados locais permanecem salvos.`);
+      if (response.status === 403) throw new Error('Drive denied access. Check that the API is enabled and the app folder is authorized.');
+      if (response.status === 404) throw new Error('A backup was not found in Drive. It may have been removed; sync again.');
+      throw new Error(`Could not sync with Drive (HTTP ${response.status}). Your local data is still saved.`);
     }
     return body;
   } catch (error) {
-    if (timedOut) throw new Error('O Drive demorou para responder. Seus dados locais estão salvos; tente sincronizar novamente.');
-    if (controller.signal.aborted) throw new Error('A sincronização com o Drive foi cancelada.');
-    if (error instanceof TypeError) throw new Error('Não foi possível acessar o Drive. Verifique sua internet e tente novamente.');
+    if (timedOut) throw new Error('Drive took too long to respond. Your local data is saved; try syncing again.');
+    if (controller.signal.aborted) throw new Error('Drive synchronization was canceled.');
+    if (error instanceof TypeError) throw new Error('Could not access Drive. Check your internet connection and try again.');
     throw error;
   } finally {
     clearTimeout(timer);
@@ -249,7 +249,7 @@ async function driveRequest(url: string, options: RequestInit = {}): Promise<str
 
 function parseDriveJson(text: string): unknown {
   try { return JSON.parse(text); } catch {
-    throw new Error('O Drive retornou uma resposta inválida. Seus dados locais estão preservados; tente novamente.');
+    throw new Error('Drive returned an invalid response. Your local data is preserved; try again.');
   }
 }
 
@@ -266,7 +266,7 @@ function deviceId(): string {
     localStorage.setItem(DEVICE_STORAGE_KEY, created);
     return created;
   } catch {
-    throw new Error('O navegador bloqueou o armazenamento local. Libere-o para identificar este computador na sincronização.');
+    throw new Error('The browser blocked local storage. Enable it to identify this computer during synchronization.');
   }
 }
 
@@ -276,13 +276,13 @@ function snapshotFile(value: unknown): SnapshotFile {
       || file.mimeType !== 'application/json' || typeof file.modifiedTime !== 'string'
       || !Number.isFinite(Date.parse(file.modifiedTime)) || !file.appProperties || ![APP_ID, LEGACY_APP_ID].includes(file.appProperties.app)
       || typeof file.appProperties.deviceId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(file.appProperties.deviceId)) {
-    throw new Error('Um backup do aplicativo no Drive tem metadados inválidos. Nenhum dado novo foi enviado.');
+    throw new Error('An app backup in Drive has invalid metadata. No new data was uploaded.');
   }
   if (file.appProperties.version !== '1') {
-    throw new Error('Um backup do Drive usa outra versão do aplicativo. Atualize o programa antes de sincronizar.');
+    throw new Error('A Drive backup uses another app version. Update the app before syncing.');
   }
   if (file.size !== undefined && (!/^\d+$/.test(file.size) || Number(file.size) > MAX_SNAPSHOT_BYTES)) {
-    throw new Error('Um backup no Drive tem tamanho inválido ou supera 25 MB. Nenhum dado novo foi enviado.');
+    throw new Error('A Drive backup has an invalid size or exceeds 25 MB. No new data was uploaded.');
   }
   return file as SnapshotFile;
 }
@@ -301,10 +301,10 @@ async function latestSnapshots(): Promise<SnapshotFile[]> {
     if (pageToken) query.set('pageToken', pageToken);
     const page = parseDriveJson(await driveRequest(`${API_ROOT}/files?${query}`));
     if (!page || typeof page !== 'object' || !Array.isArray((page as { files?: unknown }).files)) {
-      throw new Error('O Drive retornou uma lista de backups inválida. Nenhum dado novo foi enviado.');
+      throw new Error('Drive returned an invalid backup list. No new data was uploaded.');
     }
     const parsed = page as { files: unknown[]; nextPageToken?: unknown; incompleteSearch?: boolean };
-    if (parsed.incompleteSearch) throw new Error('O Drive não conseguiu listar todos os backups. Tente novamente antes de enviar seus dados.');
+    if (parsed.incompleteSearch) throw new Error('Drive could not list every backup. Try again before uploading your data.');
     for (const entry of parsed.files) {
       const file = snapshotFile(entry);
       const previous = latest.get(file.appProperties.deviceId);
@@ -315,10 +315,10 @@ async function latestSnapshots(): Promise<SnapshotFile[]> {
       }
     }
     if (parsed.nextPageToken !== undefined && (typeof parsed.nextPageToken !== 'string' || !parsed.nextPageToken)) {
-      throw new Error('O Drive retornou uma paginação inválida. Nenhum dado novo foi enviado.');
+      throw new Error('Drive returned invalid pagination. No new data was uploaded.');
     }
     pageToken = parsed.nextPageToken as string | undefined;
-    if (pageToken && visitedTokens.has(pageToken)) throw new Error('O Drive repetiu uma página de backups. Tente sincronizar novamente.');
+    if (pageToken && visitedTokens.has(pageToken)) throw new Error('Drive repeated a page of backups. Try syncing again.');
     if (pageToken) visitedTokens.add(pageToken);
   } while (pageToken);
   return [...latest.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, file]) => file);
@@ -331,14 +331,14 @@ async function syncSnapshots(data: FinanceData): Promise<{ data: FinanceData; sy
   const remoteData = await Promise.all(files.map(async file => {
     const content = await driveRequest(`${API_ROOT}/files/${encodeURIComponent(file.id)}?alt=media`);
     try { return validateBackup(JSON.parse(content)); } catch {
-      throw new Error('O último backup de um computador no Drive está inválido. Nenhum dado novo foi enviado; seus dados locais estão preservados.');
+      throw new Error('The latest Drive backup from a computer is invalid. No new data was uploaded; your local data is preserved.');
     }
   }));
   let merged = validateBackup(data);
   // mergeFinanceData preserves the local public Client ID, which is not cloud data.
   for (const remote of remoteData) merged = mergeFinanceData(merged, remote);
   const payload = serializeBackup(merged);
-  if (new Blob([payload]).size > MAX_SNAPSHOT_BYTES) throw new Error('Os dados superam 25 MB. Exporte um backup e reduza o histórico antes de sincronizar.');
+  if (new Blob([payload]).size > MAX_SNAPSHOT_BYTES) throw new Error('The data exceeds 25 MB. Export a backup and reduce the history before syncing.');
   const boundary = `${APP_ID}_${crypto.randomUUID().replaceAll('-', '')}`;
   const metadata = {
     name: `${APP_ID}-${new Date().toISOString().replaceAll(':', '-')}-${crypto.randomUUID()}.json`,
@@ -354,7 +354,7 @@ async function syncSnapshots(data: FinanceData): Promise<{ data: FinanceData; sy
     body,
   }));
   if (!created || typeof created !== 'object' || typeof (created as { id?: unknown }).id !== 'string') {
-    throw new Error('O Drive não confirmou o novo backup. Tente sincronizar novamente; os backups anteriores foram preservados.');
+    throw new Error('Drive did not confirm the new backup. Try syncing again; previous backups were preserved.');
   }
   const modifiedTime = (created as { modifiedTime?: unknown }).modifiedTime;
   return { data: merged, syncedAt: typeof modifiedTime === 'string' && Number.isFinite(Date.parse(modifiedTime)) ? modifiedTime : new Date().toISOString() };
@@ -362,10 +362,10 @@ async function syncSnapshots(data: FinanceData): Promise<{ data: FinanceData; sy
 
 /** Merges the latest snapshot of every device, then appends one complete snapshot. */
 export async function syncDrive(data: FinanceData): Promise<{ data: FinanceData; syncedAt: string }> {
-  if (syncing) throw new Error('Uma sincronização já está em andamento. Aguarde a conclusão.');
+  if (syncing) throw new Error('Synchronization is already in progress. Wait for it to finish.');
   const authorized = requireSession();
   const sync = () => {
-    if (session !== authorized) throw new Error('A sincronização foi cancelada porque a conexão com o Google mudou.');
+    if (session !== authorized) throw new Error('Synchronization was canceled because the Google connection changed.');
     return syncSnapshots(data);
   };
   syncing = true;
@@ -383,8 +383,8 @@ export async function syncDrive(data: FinanceData): Promise<{ data: FinanceData;
           return sync();
         });
       } catch (error) {
-        if (lockTimedOut) throw new Error('Outra aba está sincronizando há algum tempo. Feche-a ou aguarde a conclusão antes de tentar novamente.');
-        if (controller.signal.aborted) throw new Error('A sincronização com o Drive foi cancelada.');
+        if (lockTimedOut) throw new Error('Another tab has been syncing for some time. Close it or wait for it to finish before trying again.');
+        if (controller.signal.aborted) throw new Error('Drive synchronization was canceled.');
         throw error;
       } finally {
         clearTimeout(timer);

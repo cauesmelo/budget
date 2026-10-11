@@ -1,10 +1,11 @@
 import type { FinanceData, ImportResult, MonthSummary, PlanItem, ProjectionMonth, Transaction } from './types';
 import { mergeCategoryCatalog, normalizeCategoryData } from './categories';
+import { canonicalAccountIdentity } from './identity';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const MONTH_FORMAT = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-/** Centavos são inteiros; os lançamentos têm sinal de fluxo de caixa. */
+/** Amounts use integer cents; transaction signs follow cash flow. */
 export function formatMoney(cents: number): string {
   return MONEY_FORMAT.format(cents / 100);
 }
@@ -20,21 +21,21 @@ export function isValidDate(value: unknown): value is string {
 }
 
 export function formatMonth(month: string): string {
-  if (!isValidMonth(month)) throw new Error('Mês inválido. Use AAAA-MM.');
+  if (!isValidMonth(month)) throw new Error('Invalid month. Use YYYY-MM.');
   return MONTH_FORMAT.format(new Date(`${month}-01T12:00:00.000Z`));
 }
 
 export function addMonths(month: string, count: number): string {
-  if (!isValidMonth(month) || !Number.isInteger(count)) throw new Error('Mês ou intervalo inválido.');
+  if (!isValidMonth(month) || !Number.isInteger(count)) throw new Error('Invalid month or interval.');
   const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5)) - 1 + count;
   const year = Math.floor(index / 12);
   const monthNumber = ((index % 12) + 12) % 12 + 1;
-  if (year < 1 || year > 9999) throw new Error('Mês fora do intervalo suportado.');
+  if (year < 1 || year > 9999) throw new Error('Month is outside the supported range.');
   return `${String(year).padStart(4, '0')}-${String(monthNumber).padStart(2, '0')}`;
 }
 
 export function createEmptyData(now = new Date()): FinanceData {
-  if (!Number.isFinite(now.getTime())) throw new Error('Data inválida.');
+  if (!Number.isFinite(now.getTime())) throw new Error('Invalid date.');
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).formatToParts(now);
   const month = `${parts.find(part => part.type === 'year')!.value}-${parts.find(part => part.type === 'month')!.value}`;
   const updatedAt = now.toISOString();
@@ -48,15 +49,15 @@ export function createEmptyData(now = new Date()): FinanceData {
   };
 }
 
-/** Aceita números de planilha e texto monetário brasileiro, incluindo crédito/estorno. */
+/** Accepts spreadsheet numbers and Brazilian currency text, including credits and refunds. */
 export function parseMoneyToCents(value: unknown): number {
   if (value == null || value === '') return 0;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('Valor monetário inválido.');
-    // Conversão decimal explícita evita o arredondamento binário de 1,005 * 100.
+    if (!Number.isFinite(value)) throw new Error('Invalid monetary amount.');
+    // Explicit decimal conversion avoids binary rounding of 1.005 * 100.
     return decimalToCents(value.toFixed(10), false);
   }
-  if (typeof value !== 'string') throw new Error('Valor monetário inválido.');
+  if (typeof value !== 'string') throw new Error('Invalid monetary amount.');
   let text = value.trim();
   if (!text || /^[-–—]$/.test(text)) return 0;
   let negative = false;
@@ -70,7 +71,7 @@ export function parseMoneyToCents(value: unknown): number {
   if (text.endsWith('-')) { negative = true; text = text.slice(0, -1); }
   if (text.startsWith('-')) { negative = true; text = text.slice(1); }
   else if (text.startsWith('+')) text = text.slice(1);
-  if (!/^\d+(?:[.,]\d+)*$/.test(text)) throw new Error(`Valor monetário inválido: ${value}`);
+  if (!/^\d+(?:[.,]\d+)*$/.test(text)) throw new Error(`Invalid monetary amount: ${value}`);
 
   const comma = text.lastIndexOf(',');
   const dot = text.lastIndexOf('.');
@@ -78,19 +79,19 @@ export function parseMoneyToCents(value: unknown): number {
     const decimalMark = comma > dot ? ',' : '.';
     const groupMark = decimalMark === ',' ? '.' : ',';
     const [whole, fraction, ...extra] = text.split(decimalMark);
-    if (extra.length || !validGroupedInteger(whole, groupMark)) throw new Error(`Valor monetário inválido: ${value}`);
+    if (extra.length || !validGroupedInteger(whole, groupMark)) throw new Error(`Invalid monetary amount: ${value}`);
     text = `${whole.split(groupMark).join('')}.${fraction}`;
   } else if (comma >= 0) {
     const groups = text.split(',');
     if (groups.length > 2) {
-      if (!validGroupedInteger(text, ',')) throw new Error(`Valor monetário inválido: ${value}`);
+      if (!validGroupedInteger(text, ',')) throw new Error(`Invalid monetary amount: ${value}`);
       text = groups.join('');
     } else text = text.replace(',', '.');
   } else if (dot >= 0) {
     const groups = text.split('.');
     const isThousands = groups.length > 2 || (groups[0].length <= 3 && groups[1].length === 3);
     if (isThousands) {
-      if (!validGroupedInteger(text, '.')) throw new Error(`Valor monetário inválido: ${value}`);
+      if (!validGroupedInteger(text, '.')) throw new Error(`Invalid monetary amount: ${value}`);
       text = groups.join('');
     }
   }
@@ -104,18 +105,18 @@ function validGroupedInteger(text: string, separator: string): boolean {
 
 function decimalToCents(text: string, negative: boolean): number {
   if (text.startsWith('-')) { negative = true; text = text.slice(1); }
-  if (!/^\d+(?:\.\d+)?$/.test(text)) throw new Error('Valor monetário fora do intervalo suportado.');
+  if (!/^\d+(?:\.\d+)?$/.test(text)) throw new Error('Monetary amount is outside the supported range.');
   const [whole, decimal = ''] = text.split('.');
   let cents = BigInt(whole) * 100n + BigInt(decimal.padEnd(2, '0').slice(0, 2));
   if ((decimal[2] ?? '0') >= '5') cents += 1n;
   if (negative) cents = -cents;
   const result = Number(cents);
-  if (!Number.isSafeInteger(result)) throw new Error('Valor monetário fora do intervalo suportado.');
+  if (!Number.isSafeInteger(result)) throw new Error('Monetary amount is outside the supported range.');
   return result;
 }
 
 export function summarizeMonth(data: FinanceData, month: string, mode: 'transactions' | 'budget' = 'transactions'): MonthSummary {
-  if (!isValidMonth(month)) throw new Error('Mês inválido.');
+  if (!isValidMonth(month)) throw new Error('Invalid month.');
   const originals = data.transactions.filter(item => item.month === month &&
     (mode === 'budget' ? item.source === 'budget' : item.source !== 'budget'));
   const transactions = originals.filter(item => !item.deletedAt && item.kind !== 'transfer');
@@ -127,8 +128,8 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'transact
       netCents: snapshot.incomeCents - snapshot.expenseCents,
       categories: { ...snapshot.categories }, count: transactions.length,
     };
-    // Os lançamentos editáveis prevalecem, inclusive quando todos foram excluídos.
-    // Um snapshot antigo pode ter receita agregada sem lançamentos de receita.
+    // Editable transactions take precedence, even when all of them have been deleted.
+    // An older snapshot may contain aggregated income without income transactions.
     if (snapshot && !originals.some(item => item.kind === 'income')) snapshotIncomeCents = snapshot.incomeCents;
   }
   let incomeCents = snapshotIncomeCents;
@@ -139,14 +140,14 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'transact
     else {
       const amount = -transaction.amountCents;
       expenseCents += amount;
-      const category = transaction.category.trim() || 'Sem categoria';
+      const category = transaction.category.trim() || 'Uncategorized';
       Object.defineProperty(categories, category, { value: (Object.hasOwn(categories, category) ? categories[category] : 0) + amount, enumerable: true, writable: true, configurable: true });
     }
   }
   return { month, incomeCents, expenseCents, netCents: incomeCents - expenseCents, categories, count: transactions.length };
 }
 
-/** Dentro do intervalo ativo, um valor explícito por mês prevalece sobre a recorrência. */
+/** Within the active interval, an explicit monthly amount overrides the recurring amount. */
 export function planAmountForMonth(item: PlanItem, month: string): number {
   if (item.deletedAt) return 0;
   if (month < item.startMonth || (item.endMonth && month > item.endMonth)) return 0;
@@ -156,7 +157,7 @@ export function planAmountForMonth(item: PlanItem, month: string): number {
 
 export function projectReserve(data: FinanceData): ProjectionMonth[] {
   const { reserveStartMonth, horizonMonths, monthlyReturnPercent, initialReserveCents } = data.settings;
-  if (!isValidMonth(reserveStartMonth) || !Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 600 || !Number.isFinite(monthlyReturnPercent)) throw new Error('Configuração de projeção inválida.');
+  if (!isValidMonth(reserveStartMonth) || !Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 600 || !Number.isFinite(monthlyReturnPercent)) throw new Error('Invalid projection settings.');
   const rows: ProjectionMonth[] = [];
   let openingCents = initialReserveCents;
   for (let index = 0; index < horizonMonths; index++) {
@@ -168,11 +169,11 @@ export function projectReserve(data: FinanceData): ProjectionMonth[] {
       if (item.kind === 'income') incomeCents += amount;
       else if (item.kind === 'expense') expenseCents += amount;
     }
-    // Rendimento é aplicado somente ao saldo de abertura; sobra entra no fechamento.
+    // Returns apply only to the opening balance; the monthly surplus enters the closing balance.
     const returnCents = roundCents(openingCents * monthlyReturnPercent / 100);
     const netCents = incomeCents - expenseCents;
     const closingCents = openingCents + netCents + returnCents;
-    if (![incomeCents, expenseCents, returnCents, closingCents].every(Number.isSafeInteger)) throw new Error('A projeção excedeu o intervalo monetário suportado.');
+    if (![incomeCents, expenseCents, returnCents, closingCents].every(Number.isSafeInteger)) throw new Error('The projection exceeds the supported monetary range.');
     rows.push({ month, openingCents, incomeCents, expenseCents, returnCents, netCents, closingCents });
     openingCents = closingCents;
   }
@@ -200,7 +201,7 @@ function lexicalCompare(a: string, b: string): number {
 function compareRecords<T extends { updatedAt: string; deletedAt?: string }>(a: T, b: T): number {
   const clockDifference = recordClock(a) - recordClock(b);
   if (clockDifference !== 0) return clockDifference;
-  // Uma exclusão empatada prevalece sobre uma cópia ainda ativa.
+  // When timestamps tie, a deleted record takes precedence over an active copy.
   if (Boolean(a.deletedAt) !== Boolean(b.deletedAt)) return a.deletedAt ? 1 : -1;
   return lexicalCompare(canonical(a), canonical(b));
 }
@@ -215,14 +216,14 @@ function mergeRecords<T extends { id: string; updatedAt: string; deletedAt?: str
 }
 
 export function mergeFinanceData(local: FinanceData, remote: FinanceData): FinanceData {
-  if (local.version !== 1 || remote.version !== 1) throw new Error('Versão de dados não suportada.');
+  if (local.version !== 1 || remote.version !== 1) throw new Error('Unsupported data version.');
   local = normalizeCategoryData(local);
   remote = normalizeCategoryData(remote);
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
   const pristineLocal = local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
-  // O timestamp de criação em um navegador novo não é uma edição financeira.
+  // The creation timestamp in a new browser is not a financial edit.
   const remoteHasSavedState = remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
@@ -256,7 +257,7 @@ export function previewDuplicateCount(data: FinanceData, result: ImportResult): 
   return duplicates;
 }
 
-/** ImportBatch.count registra o total de novos lançamentos, itens de planejamento e snapshots. */
+/** ImportBatch.count includes all new transactions, planning items, and snapshots. */
 export function applyImport(data: FinanceData, result: ImportResult, filename: string, now = new Date()): FinanceData {
   const next = normalizeCategoryData(data);
   const updatedAt = now.toISOString();
@@ -295,23 +296,23 @@ export function applyImport(data: FinanceData, result: ImportResult, filename: s
   return normalizeCategoryData(next, true, updatedAt);
 }
 
-/** Recibo persistido junto com os dados, inclusive nos backups e na nuvem. */
+/** The receipt is persisted with the data, including backups and cloud snapshots. */
 export const INITIAL_IMPORT_ID = 'initial-legacy-budget-v1';
 
-/** Alimenta o histórico legado uma vez, preservando ajustes e exclusões anteriores. */
+/** Imports legacy history once while preserving previous edits and deletions. */
 export function applyInitialImport(data: FinanceData, result: ImportResult, filename: string, now = new Date()): FinanceData {
   if (data.imports.some(batch => batch.id === INITIAL_IMPORT_ID)) return data;
-  if (result.source !== 'budget') throw new Error('A carga inicial aceita somente o Budget legado.');
+  if (result.source !== 'budget') throw new Error('The initial import accepts only legacy Budget workbooks.');
   const updatedAt = now.toISOString();
-  // A versão anterior usava o mês da data, mesmo quando a linha pertencia a
-  // outra aba mensal. Corrija a competência sem substituir a edição da linha.
-  const legacyKey = (item: Transaction) => JSON.stringify([item.date, item.originalDescription, item.account, item.amountCents, item.sourceRow]);
+  // The previous version used the date month even when the row belonged to
+  // another monthly sheet. Correct the budget month without replacing row edits.
+  const legacyKey = (item: Transaction) => JSON.stringify([item.date, item.originalDescription, canonicalAccountIdentity(item.account), item.amountCents, item.sourceRow]);
   const incomingByRow = new Map<string, Transaction | null>();
   for (const item of result.transactions) {
     if (item.source !== 'budget' || item.sourceRow === undefined) continue;
     const key = legacyKey(item);
-    // A posição da linha se repete entre abas. Uma associação ambígua não é
-    // suficiente para corrigir a competência de um registro já existente.
+    // Row positions can repeat across sheets. An ambiguous match is not
+    // sufficient to correct the budget month of an existing record.
     incomingByRow.set(key, incomingByRow.has(key) ? null : item);
   }
   const current = {

@@ -1,10 +1,10 @@
 # Budget
 
-Budget é um aplicativo de finanças pessoais em português, com importação de extratos Itaú e planejamento de reservas. Roda no navegador, salva os dados localmente e oferece sincronização opcional pelo Google Drive, dentro das quotas gratuitas para uso pessoal.
+Budget is a personal finance application in English, with Itaú statement imports and reserve planning. It runs in the browser, saves data locally, and offers optional Google Drive synchronization within the free quotas for personal use.
 
-## Rodar em qualquer computador
+## Run on any computer
 
-Instale [Node.js 22.12 ou mais recente](https://nodejs.org/), clone este projeto e execute:
+Install [Node.js 22.12 or later](https://nodejs.org/), clone this project, and run:
 
 ```sh
 git clone https://github.com/cauesmelo/budget.git
@@ -13,75 +13,75 @@ npm ci
 npm start
 ```
 
-O navegador abre em **http://localhost:5173**. Mantenha o terminal aberto enquanto usar o aplicativo. Os lançadores `Iniciar.command` no macOS e `Iniciar.bat` no Windows fazem esses passos. No Linux, use `./iniciar.sh`. Ao atualizar o código com `git pull`, execute `npm ci` novamente.
+The browser opens at **http://localhost:5173**. Keep the terminal open while using the application. The `Start.command` launcher on macOS and `Start.bat` on Windows perform these steps. On Linux, use `./start.sh`. After updating the code with `git pull`, run `npm ci` again.
 
-Para desenvolvimento, `npm run dev`. Para uma versão estática: `npm run build`; para testar essa versão: `npm run preview`. A versão compilada tem manifesto e cache do aplicativo para acesso offline depois do primeiro carregamento, inclusive dos módulos de importação. A sincronização exige internet. A disponibilidade de instalação como aplicativo depende do navegador.
+For development, use `npm run dev`. For a static build, use `npm run build`; to test that build, use `npm run preview`. The compiled application includes a manifest and application cache for offline access after the first load, including the import modules. Synchronization requires an internet connection. Application installation support depends on the browser.
 
-## Primeira utilização
+## First use
 
-1. Em **Importar arquivos**, selecione seu Budget. A prévia mostra o histórico e os itens de médio prazo. Confirme a importação.
-2. Escolha a **competência da fatura** e importe os extratos da conta e do cartão Itaú, em `.xls` ou `.xlsx`. Confira os avisos e confirme.
-3. Em **Lançamentos**, escolha a categoria no seletor e complete a descrição. Data, lançamento original, valor, parcelas e origem já vêm preenchidos. Corrija o tipo quando necessário.
-4. Em **Médio prazo**, confira a reserva inicial na abertura do primeiro mês, receitas, despesas e horizonte. Edite os valores esperados por mês e acompanhe os gráficos.
-5. Em **Dados e nuvem**, exporte um backup ou configure a conexão com o Google Drive.
+1. In **Import files**, select your Budget workbook. The preview shows historical records and medium-term plan items. Confirm the import.
+2. Choose the **Card billing month** and import the Itaú bank and card statements in `.xls` or `.xlsx` format. Review any warnings and confirm.
+3. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type when necessary.
+4. In **Medium-term plan**, review the opening reserve for the first month, income, expenses, and planning horizon. Edit the expected monthly amounts and follow the charts.
+5. In **Data and cloud**, export a backup or configure the Google Drive connection.
 
-Arquivos repetidos mantêm suas edições e não recriam lançamentos excluídos. Movimentos idênticos que aparecem mais de uma vez no mesmo arquivo são preservados como ocorrências distintas. O reconhecimento depende de data, texto original, valor, conta, competência e parcela. Mudanças nessas informações em um novo extrato podem precisar de revisão.
+Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Changes to these fields in a new statement may require review.
 
-## Categorias
+## Categories
 
-Use **Gerenciar categorias**, disponível em Lançamentos, Médio prazo e Dados e nuvem, para criar, renomear, arquivar ou reativar opções. Os seletores permitem buscar e escolher uma categoria cadastrada; digitar na busca apenas filtra a lista. Lançamentos, inclusão manual e itens de planejamento usam a mesma lista. Você também pode manter um registro **Sem categoria** enquanto o revisa.
+Use **Manage categories**, available in Transactions, Medium-term plan, and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions, manual entries, and plan items share the same list. You can also leave a record **Uncategorized** while reviewing it.
 
-As categorias que já existem nos dados e nas planilhas importadas entram automaticamente no cadastro. Renomear atualiza a classificação dos registros existentes; arquivar retira a categoria das opções para novos lançamentos, preservando o histórico e os filtros. O cadastro acompanha o salvamento local, o backup e a sincronização com o Drive.
+Categories already present in your data and imported workbooks are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
-## Como os valores são tratados
+## How amounts are handled
 
-- Lançamentos usam centavos inteiros e sinal monetário: débito negativo, crédito positivo. Estornos do cartão reduzem o consumo.
-- Pagamentos identificáveis da fatura, aplicações e resgates de principal são transferências. Não entram em consumo nem em receitas. Rendimentos identificados entram em receitas. Essa classificação pode ser corrigida na prévia ou na lista.
-- O mês de uma compra no cartão é a competência da fatura. A data original da compra é preservada. Parcelas futuras **não são criadas automaticamente**: importe as faturas seguintes ou inclua o compromisso no planejamento.
-- **Extratos e lançamentos** e **Histórico do Budget** têm visões separadas, pois a planilha já contém despesas que podem reaparecer nos extratos. As duas fontes nunca são somadas no mesmo total.
-- O histórico do Budget usa o mês da aba como competência, preservando a data original e todas as categorias. Os totais de consumo são reconstruídos pelas linhas e podem diferir de indicadores da planilha que excluam determinadas categorias. Investimentos identificados ficam como transferências.
-- O planejamento é independente do realizado. Importar um extrato não altera automaticamente sua previsão.
-- Reserva ao final = reserva na abertura + receitas planejadas − despesas de consumo + rendimento esperado sobre a abertura. O saldo final vira a abertura do mês seguinte. Aportes são metas internas, pois mover dinheiro para uma reserva não reduz o patrimônio total. Não são subtraídos nem adicionados novamente.
-- A migração usa valores disponíveis nas células da planilha e cria campos editáveis; não executa fórmulas do Excel. Importações posteriores do Budget acrescentam registros novos e preservam os itens já editados no aplicativo.
-- Uma fatura aberta pode mudar, e lançamentos bancários podem usar datas futuras de processamento. Os avisos da importação ajudam a revisar esses casos.
+- Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
+- Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
+- A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.
+- **Statements and transactions** and **Budget history** have separate views because the workbook already contains expenses that may reappear in statements. The two sources are never added to the same total.
+- Budget history uses the worksheet month as its reporting month, preserving the original date and all categories. Spending totals are rebuilt from the rows and may differ from workbook indicators that exclude certain categories. Identified investments remain transfers.
+- Planning is independent of actual transactions. Importing a statement does not automatically change your forecast.
+- Closing reserve = opening reserve + planned income − spending expenses + expected return on the opening reserve. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.
+- Migration uses the values available in workbook cells and creates editable fields; it does not execute Excel formulas. Subsequent Budget imports add new records and preserve items already edited in the application.
+- An open card bill can change, and bank transactions can use future processing dates. Import warnings help you review these cases.
 
-## Nuvem sem servidor pago
+## Cloud storage without a paid server
 
-A opção implementada é **Google Drive**, usando a pasta própria do aplicativo e arquivos JSON. O Google Docs é um editor de texto; Google Sheets é uma alternativa se editar os dados diretamente como planilha for essencial. Drive oferece menos configuração e mantém o modelo completo do aplicativo. OneDrive é uma alternativa compatível com a conta Microsoft existente; Supabase é mais adequado quando houver vários usuários, mas o plano gratuito pode pausar por inatividade.
+The implemented option is **Google Drive**, using the application's own folder and JSON files. Google Docs is a text editor; Google Sheets is an alternative if editing the data directly as a spreadsheet is essential. Drive requires less configuration and preserves the application's complete data model. OneDrive is compatible with an existing Microsoft account; Supabase is more suitable for multiple users, but its free plan can pause inactive projects.
 
-A configuração do Drive precisa de um ID OAuth criado na sua conta Google. Não requer senha bancária, Client Secret ou servidor. A autorização pede apenas `drive.appdata`. O token fica na memória e pode exigir uma nova conexão quando expirar. Siga o [guia de configuração e comparação](docs/NUVEM.md), com fontes oficiais e limites pesquisados em outubro de 2026.
+Drive setup requires an OAuth client ID created in your Google account. It does not require a banking password, client secret, or server. Authorization requests only `drive.appdata`. The token stays in memory, and you may need to reconnect when it expires. Follow the [setup and comparison guide](docs/CLOUD.md), with official sources and limits researched in October 2026.
 
-Em outro computador, use o mesmo ID OAuth e **sincronize antes de começar**. A sincronização é acionada pelo botão e deve ser repetida depois das alterações. Ela reúne as últimas cópias dos computadores e salva uma nova cópia no Drive; mantém as anteriores. Se o mesmo registro for editado em dois computadores, a edição com horário mais recente prevalece. Mantenha os relógios dos computadores corretos. Exclusões também são sincronizadas. Edições simultâneas em campos do mesmo registro não são combinadas individualmente.
+On another computer, use the same OAuth client ID and **synchronize before starting**. Synchronization is triggered by the button and should be repeated after making changes. It merges the latest copies from your computers and saves a new copy to Drive, keeping previous copies. If the same record is edited on two computers, the edit with the latest timestamp wins. Keep the computers' clocks accurate. Deletions are also synchronized. Concurrent changes to fields of the same record are not merged individually.
 
-## Dados pessoais e GitHub
+## Personal data and GitHub
 
-O código não inclui os arquivos fornecidos, nomes de extratos pessoais, lançamentos reais ou backups. Os exemplos dos testes são fictícios. O `.gitignore` exclui planilhas, extratos, arquivos de credenciais, chaves, backups e as pastas `data`, `private` e `backups`. O backup JSON contém seus dados financeiros; salve-o fora do repositório. Credenciais OAuth e tokens não são incluídos no backup nem nos arquivos enviados ao Drive.
+The code does not include supplied files, personal statement filenames, real transactions, or backups. Test examples are fictional. `.gitignore` excludes workbooks, statements, credential files, keys, backups, and the `data`, `private`, and `backups` directories. A JSON backup contains your financial data; store it outside the repository. OAuth credentials and tokens are not included in backups or files uploaded to Drive.
 
-Os dados locais pertencem ao perfil do navegador e à origem/porta do site. Outro navegador ou uma porta diferente terá outro armazenamento. Limpar os dados do navegador ou usar uma janela anônima pode apagar a cópia local. Antes disso, exporte um backup ou sincronize.
+Local data belongs to the browser profile and the site's origin and port. Another browser or a different port has separate storage. Clearing browser data or using an incognito window can erase the local copy. Export a backup or synchronize before doing so.
 
-A carga inicial do Budget legado registra um recibo junto com os dados. Esse recibo acompanha os backups e a sincronização e impede repetir a carga, mesmo após excluir os registros importados. A carga preserva edições, exclusões, categorias e configurações locais já ajustadas.
+The initial legacy Budget import records a receipt alongside the data. This receipt travels with backups and synchronization and prevents repeating the initial load, even after imported records are deleted. The initial load preserves existing edits, deletions, categories, and customized local settings.
 
-A atualização do nome migra automaticamente os dados locais da versão anterior e continua reconhecendo seus backups e as cópias anteriores no Drive. O ID do dispositivo também é preservado. As novas cópias exportadas usam o nome `budget-backup-AAAA-MM-DD.json`.
+The application rename automatically migrates local data from the previous version and continues to recognize its backups and older Drive copies. The device ID is also preserved. Newly exported backups use the name `budget-backup-YYYY-MM-DD.json`.
 
-O código está no repositório [cauesmelo/budget](https://github.com/cauesmelo/budget) e pode ser clonado em outros computadores. O aplicativo não envia seus dados ao GitHub. Para usar uma hospedagem estática, publique somente o conteúdo de `dist`, sem extratos e sem dados pessoais; cadastre a origem HTTPS correspondente no cliente OAuth. O projeto não precisa de hospedagem para funcionar localmente.
+The code is hosted in [cauesmelo/budget](https://github.com/cauesmelo/budget) and can be cloned on other computers. The application does not send your data to GitHub. To use static hosting, publish only the contents of `dist`, without statements or personal data, and register the corresponding HTTPS origin in the OAuth client. The project does not need hosting to run locally.
 
-## Verificação
+## Verification
 
 ```sh
 npm test
 npm run build
 ```
 
-Os testes cobrem cálculo em centavos, estornos, aportes, projeção, duplicidade, migração, exclusões, validação de backup e sincronização com chamadas Google simuladas.
+Tests cover calculations in cents, refunds, contributions, projections, duplicates, migration, deletions, backup validation, and synchronization with mocked Google calls.
 
-Há testes opcionais para os três arquivos de referência. Eles leem os arquivos diretamente e não os copiam para o projeto:
+Optional tests are available for the three reference files. They read the files directly without copying them into the project:
 
 ```sh
-PRIVATE_IMPORT_DIR="/caminho/fora/do/repositorio" npm run test:files
+PRIVATE_IMPORT_DIR="/path/outside/the/repository" npm run test:files
 ```
 
-Os nomes padrão são `budget.xlsx`, `extrato.xls` e `fatura.xlsx`. Para usar outros nomes, informe `PRIVATE_BUDGET_FILE`, `PRIVATE_BANK_FILE` e `PRIVATE_CARD_FILE` no ambiente local; não grave nomes pessoais no código. Sem `PRIVATE_IMPORT_DIR`, os testes privados são ignorados. A autorização real do Google só pode ser validada depois de configurar seu próprio ID OAuth.
+The default filenames are `budget.xlsx`, `statement.xls`, and `invoice.xlsx`. To use other names, set `PRIVATE_BUDGET_FILE`, `PRIVATE_BANK_FILE`, and `PRIVATE_CARD_FILE` in your local environment; do not store personal filenames in the code. Without `PRIVATE_IMPORT_DIR`, private tests are skipped. Real Google authorization can only be validated after configuring your own OAuth client ID.
 
-## Estrutura
+## Structure
 
-`src/App.tsx` contém as telas. `src/lib/categories.ts` mantém o cadastro e a migração de categorias. `src/lib/importers.ts` lê os formatos. `src/lib/finance.ts` calcula totais, projeções e fusões. `src/lib/storage.ts` valida e guarda os dados no IndexedDB. `src/lib/drive.ts` autoriza o Google e sincroniza cópias. O código usa React, TypeScript, Vite, Recharts e a versão oficial do SheetJS CE.
+`src/App.tsx` contains the screens. `src/lib/categories.ts` manages the category catalog and category migration. `src/lib/importers.ts` reads supported formats. `src/lib/finance.ts` calculates totals, projections, and merges. `src/lib/storage.ts` validates and stores data in IndexedDB. `src/lib/drive.ts` handles Google authorization and copy synchronization. The application uses React, TypeScript, Vite, Recharts, and the official SheetJS CE distribution.
