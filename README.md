@@ -7,6 +7,8 @@ Budget é um aplicativo de finanças pessoais em português, com importação de
 Instale [Node.js 22.12 ou mais recente](https://nodejs.org/), clone este projeto e execute:
 
 ```sh
+git clone https://github.com/cauesmelo/budget.git
+cd budget
 npm ci
 npm start
 ```
@@ -37,7 +39,7 @@ As categorias que já existem nos dados e nas planilhas importadas entram automa
 - Pagamentos identificáveis da fatura, aplicações e resgates de principal são transferências. Não entram em consumo nem em receitas. Rendimentos identificados entram em receitas. Essa classificação pode ser corrigida na prévia ou na lista.
 - O mês de uma compra no cartão é a competência da fatura. A data original da compra é preservada. Parcelas futuras **não são criadas automaticamente**: importe as faturas seguintes ou inclua o compromisso no planejamento.
 - **Extratos e lançamentos** e **Histórico do Budget** têm visões separadas, pois a planilha já contém despesas que podem reaparecer nos extratos. As duas fontes nunca são somadas no mesmo total.
-- O histórico do Budget conserva todas as categorias, inclusive categorias de trabalho. Os totais de consumo são reconstruídos pelas linhas e podem diferir dos indicadores “Total sem categorias de trabalho” da planilha. Investimentos identificados ficam como transferências.
+- O histórico do Budget conserva todas as categorias. Os totais de consumo são reconstruídos pelas linhas e podem diferir de indicadores da planilha que excluam determinadas categorias. Investimentos identificados ficam como transferências.
 - O planejamento é independente do realizado. Importar um extrato não altera automaticamente sua previsão.
 - Reserva ao final = reserva na abertura + receitas planejadas − despesas de consumo + rendimento esperado sobre a abertura. O saldo final vira a abertura do mês seguinte. Aportes são metas internas, pois mover dinheiro para uma reserva não reduz o patrimônio total. Não são subtraídos nem adicionados novamente.
 - A migração usa valores disponíveis nas células da planilha e cria campos editáveis; não executa fórmulas do Excel. Importações posteriores do Budget acrescentam registros novos e preservam os itens já editados no aplicativo.
@@ -53,13 +55,13 @@ Em outro computador, use o mesmo ID OAuth e **sincronize antes de começar**. A 
 
 ## Dados pessoais e GitHub
 
-O código não inclui os arquivos fornecidos, lançamentos reais ou backups. O `.gitignore` exclui planilhas, extratos e as pastas `data`, `private` e `backups`. O backup JSON contém seus dados financeiros; salve-o fora do repositório. Credenciais OAuth e tokens não são incluídos no backup nem nos arquivos enviados ao Drive.
+O código não inclui os arquivos fornecidos, nomes de extratos pessoais, lançamentos reais ou backups. Os exemplos dos testes são fictícios. O `.gitignore` exclui planilhas, extratos, arquivos de credenciais, chaves, backups e as pastas `data`, `private` e `backups`. O backup JSON contém seus dados financeiros; salve-o fora do repositório. Credenciais OAuth e tokens não são incluídos no backup nem nos arquivos enviados ao Drive.
 
 Os dados locais pertencem ao perfil do navegador e à origem/porta do site. Outro navegador ou uma porta diferente terá outro armazenamento. Limpar os dados do navegador ou usar uma janela anônima pode apagar a cópia local. Antes disso, exporte um backup ou sincronize.
 
 A atualização do nome migra automaticamente os dados locais da versão anterior e continua reconhecendo seus backups e as cópias anteriores no Drive. O ID do dispositivo também é preservado. As novas cópias exportadas usam o nome `budget-backup-AAAA-MM-DD.json`.
 
-Você pode salvar o código no seu GitHub pessoal e cloná-lo em outros computadores. Nenhum repositório remoto é criado nem enviado automaticamente. Para usar uma hospedagem estática, publique somente o conteúdo de `dist`, sem extratos e sem dados pessoais; cadastre a origem HTTPS correspondente no cliente OAuth. O projeto não precisa de hospedagem para funcionar localmente.
+O código está no repositório [cauesmelo/budget](https://github.com/cauesmelo/budget) e pode ser clonado em outros computadores. O aplicativo não envia seus dados ao GitHub. Para usar uma hospedagem estática, publique somente o conteúdo de `dist`, sem extratos e sem dados pessoais; cadastre a origem HTTPS correspondente no cliente OAuth. O projeto não precisa de hospedagem para funcionar localmente.
 
 ## Verificação
 
@@ -73,10 +75,10 @@ Os testes cobrem cálculo em centavos, estornos, aportes, projeção, duplicidad
 Há testes opcionais para os três arquivos de referência. Eles leem os arquivos diretamente e não os copiam para o projeto:
 
 ```sh
-PRIVATE_IMPORT_DIR="$HOME/Downloads" npm run test:files
+PRIVATE_IMPORT_DIR="/caminho/fora/do/repositorio" npm run test:files
 ```
 
-Os nomes de referência estão em `tests/private-files.test.ts`; fora desse ambiente, os testes privados são ignorados. A autorização real do Google só pode ser validada depois de configurar seu próprio ID OAuth.
+Os nomes padrão são `budget.xlsx`, `extrato.xls` e `fatura.xlsx`. Para usar outros nomes, informe `PRIVATE_BUDGET_FILE`, `PRIVATE_BANK_FILE` e `PRIVATE_CARD_FILE` no ambiente local; não grave nomes pessoais no código. Sem `PRIVATE_IMPORT_DIR`, os testes privados são ignorados. A autorização real do Google só pode ser validada depois de configurar seu próprio ID OAuth.
 
 ## Estrutura
 
