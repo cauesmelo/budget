@@ -1,20 +1,37 @@
 # Logo do Budget
 
-Logo principal: [PNG com fundo transparente](../public/brand/budget-logo.png), 2172 × 724 px.
+![Logo horizontal](../public/brand/budget-app-preview.png)
 
-O símbolo combina um `b` com os compartimentos de uma carteira. A composição usa o nome em minúsculas, verde escuro e um detalhe em verde sálvia, seguindo as cores do aplicativo.
+A identidade segue a referência escolhida pelo usuário: folha de traço fino, nome `budget` em Manrope e ponto verde. O SVG horizontal já é usado na aplicação. Na barra lateral compacta, aparece somente a folha; o favicon e o ícone instalável também usam esse símbolo.
 
-Criada com a ferramenta integrada de geração de imagens, pela habilidade imagegen. Este arquivo registra a proposta visual; o PNG é um arquivo raster.
+## Arquivos
 
-## Prompt de criação
+| Uso | Arquivo | Formato |
+| --- | --- | --- |
+| Aplicação, logo principal | [budget-app.svg](../public/brand/budget-app.svg) | SVG transparente, com Manrope incorporada |
+| Logo horizontal para outras aplicações | [budget-app.png](../public/brand/budget-app.png) | PNG transparente, 834 × 228 px |
+| Prévia sobre fundo verde | [budget-app-preview.png](../public/brand/budget-app-preview.png) | PNG, 834 × 228 px |
+| Folha isolada | [budget-leaf.svg](../public/brand/budget-leaf.svg) | SVG transparente |
+| Upload no Google | [budget-google-120.png](../public/brand/budget-google-120.png) | PNG, 120 × 120 px, menos de 1 MB |
+| Ícone em resolução maior | [budget-google-512.png](../public/brand/budget-google-512.png) | PNG, 512 × 512 px |
+| Ícone quadrado em vetor | [budget-google.svg](../public/brand/budget-google.svg) | SVG com fundo verde |
 
-```text
-Use case: logo-brand.
-Asset type: primary logo for "budget", a Brazilian personal-finance application.
-Create one polished, distinctive horizontal logo lockup on a genuinely transparent background. Only the logo, with clean generous margins; no presentation board, no mockup.
-Concept: a compact geometric lowercase b symbol whose rounded, organized inner spaces subtly recall the compartments of a wallet. A small upward offset in the upper compartment suggests planning ahead. The symbol should feel balanced, calm, clear and memorable, readable at small app-icon sizes.
-Place the symbol next to the exact lowercase word "budget", spelled b-u-d-g-e-t. Custom clean rounded geometric sans-serif wordmark, medium-bold, expertly kerned, with generous counters; approachable and confident.
-Palette inherited from the application: deep forest green #142B29 for the main symbol and wordmark, with a restrained soft sage #A8C78D accent in one part of the symbol. Flat solid colors, crisp smooth edges, strong silhouette and intentional negative space.
-The symbol and wordmark must form one cohesive design. Keep the symbol near the height of the wordmark including ascenders. Use a wide horizontal canvas with the logo centered, filling most of its width. All outside space and all negative-space holes must be truly transparent.
-Avoid dollar signs, coins, piggy banks, literal stock charts, generic arrows, leaves, gradients, shadows, 3D, tiny decorative details, taglines, extra letters or any explanatory text.
-```
+No Google Cloud, abra **Google Auth Platform → Branding → App logo** e envie `budget-google-120.png`. O Google recomenda imagem quadrada de 120 × 120 px, com até 1 MB, nos formatos PNG, JPG ou BMP. [Requisitos oficiais](https://support.google.com/cloud/answer/15549049?hl=en-GB).
+
+## Cores e fonte
+
+| Elemento | Cor |
+| --- | --- |
+| Fundo verde escuro | `#142b29` |
+| Nome em branco suave | `#f5f8ed` |
+| Folha em verde claro | `#cee9b5` |
+| Ponto verde | `#a5cd8a` |
+
+A fonte é Manrope 600, a mesma face carregada na marca original do aplicativo. O SVG incorpora a fonte para preservar o desenho sem exigir instalação de fontes no computador.
+
+Os arquivos foram construídos diretamente em SVG, usando a fonte e o traço de folha já presentes no projeto. Os PNGs são exportações desses vetores pelo navegador.
+
+## Licenças
+
+- Manrope: [SIL Open Font License 1.1](brand-licenses/Manrope-OFL.txt).
+- Folha Lucide: [ISC/MIT](brand-licenses/Lucide-LICENSE.txt).
