@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+data/
+private/
+backups/
+reserva-backup-*.json
+*.xlsx
+*.xls
+*.csv
+*.ofx
+*.tsbuildinfo
+playwright-report/
+test-results/

@@ -1,0 +1,10 @@
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+const entries = await readdir('dist/assets');
+const files = ['./', './index.html', './icon.svg', './manifest.webmanifest', ...entries.map(name => `./assets/${name}`)];
+const hash = createHash('sha256').update(await readFile('dist/index.html')).digest('hex').slice(0, 12);
+await writeFile('dist/sw.js', `const CACHE='reserva-${hash}'; const FILES=${JSON.stringify(files)};
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('reserva-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).catch(err=>{if(e.request.mode==='navigate')return caches.match('./index.html');throw err;})));});
+`);
