@@ -9,28 +9,27 @@ const LATER = new Date('2026-10-12T15:00:00.000Z');
 const AFTER = new Date('2026-10-13T15:00:00.000Z');
 const transaction = (id: string, category = 'Groceries'): Transaction => ({
   id, fingerprint: id, date: '2026-10-10', month: '2026-10', amountCents: -1_000,
-  kind: 'expense', source: 'budget', account: 'Account', originalDescription: id, description: id,
+  kind: 'expense', source: 'bank', account: 'Account', originalDescription: id, description: id,
   category, updatedAt: NOW.toISOString(),
 });
 function state(): FinanceData {
   const data = addCategory(createEmptyData(NOW), 'Groceries', NOW);
   data.transactions = [transaction('expense'), transaction('empty', '')];
   data.planItems = [{ id: 'plan', name: 'Monthly purchase', category: 'Groceries', kind: 'expense', defaultAmountCents: 2_000, amounts: {}, startMonth: '2026-10', updatedAt: NOW.toISOString() }];
-  data.snapshots = [{ id: 'snapshot', month: '2026-10', incomeCents: 0, expenseCents: 1_000, categories: { Groceries: 1_000 }, updatedAt: NOW.toISOString() }];
   return data;
 }
-const imported = (transactions: Transaction[]): ImportResult => ({ source: 'budget', transactions, planItems: [], snapshots: [], warnings: [] });
+const imported = (transactions: Transaction[]): ImportResult => ({ source: 'bank', transactions, warnings: [] });
 
 describe('category catalog', () => {
-  it('migrates categories from every legacy source without adding generic options', () => {
-    const legacy: any = state();
-    delete legacy.categories;
-    legacy.planItems[0].category = 'Housing';
-    legacy.snapshots[0].categories = { Health: 1_000 };
-    const restored = validateBackup(JSON.stringify(legacy));
+  it('adopts referenced categories when restoring an older catalog-free backup', () => {
+    const previous: any = state();
+    delete previous.categories;
+    previous.planItems[0].category = 'Housing';
+    previous.transactions.push(transaction('health', 'Health'));
+    const restored = validateBackup(JSON.stringify(previous));
     expect(allCategoryNames(restored)).toEqual(['Groceries', 'Health', 'Housing']);
     expect(restored.transactions[1].category).toBe('');
-    expect(listCategories(restored)).toEqual(listCategories(validateBackup(legacy)));
+    expect(listCategories(restored)).toEqual(listCategories(validateBackup(previous)));
     expect(createEmptyData(NOW).categories).toEqual([]);
     expect(availableCategoryNames(restored)).not.toContain('Uncategorized');
   });
@@ -46,14 +45,13 @@ describe('category catalog', () => {
     expect(validateBackup(serializeBackup(next)).categories).toEqual(next.categories);
   });
 
-  it('renames all records and snapshots without changing cents or tombstones', () => {
+  it('renames transaction and plan categories without changing cents or tombstones', () => {
     const original = state();
     original.transactions[0].deletedAt = NOW.toISOString();
     const renamed = renameCategory(original, original.categories[0].id, 'Supermarket', LATER);
     expect(renamed.categories[0]).toMatchObject({ id: original.categories[0].id, name: 'Supermarket', aliases: ['Groceries'], updatedAt: LATER.toISOString() });
     expect(renamed.transactions[0]).toMatchObject({ category: 'Supermarket', amountCents: -1_000, deletedAt: NOW.toISOString(), updatedAt: LATER.toISOString() });
     expect(renamed.planItems[0]).toMatchObject({ category: 'Supermarket', defaultAmountCents: 2_000 });
-    expect(renamed.snapshots[0].categories).toEqual({ Supermarket: 1_000 });
     expect(renamed.transactions[1].category).toBe('');
     expect(original.transactions[0].category).toBe('Groceries');
     expect(() => addCategory(renamed, 'Groceries', AFTER)).toThrow();
@@ -61,17 +59,17 @@ describe('category catalog', () => {
     expect(() => renameCategory(conflicting, original.categories[0].id, 'HOUSING', AFTER)).toThrow();
   });
 
-  it('combines snapshot aliases with special keys without prototype pollution', () => {
+  it('normalizes aliases containing special property names without prototype pollution', () => {
     let data = state();
     data = renameCategory(data, data.categories[0].id, '__proto__', LATER);
-    expect(Object.getPrototypeOf(data.snapshots[0].categories)).toBe(Object.prototype);
-    expect(Object.hasOwn(data.snapshots[0].categories, '__proto__')).toBe(true);
-    expect(data.snapshots[0].categories.__proto__).toBe(1_000);
-    const snapshot = JSON.parse('{"Groceries":700,"__proto__":300}');
-    data.snapshots[0].categories = snapshot;
-    expect(normalizeCategoryData(data, false).snapshots[0].categories.__proto__).toBe(1_000);
-    data.snapshots[0].categories = JSON.parse('{"Groceries":9007199254740991,"__proto__":1}');
-    expect(() => normalizeCategoryData(data, false)).toThrow('monetary range');
+    data.transactions.push(transaction('previous-label'));
+    const normalized = normalizeCategoryData(data, false);
+    expect(normalized.transactions.filter(item => item.category).every(item => item.category === '__proto__')).toBe(true);
+    expect(normalized.planItems[0].category).toBe('__proto__');
+    const categories = summarizeMonth(normalized, '2026-10').categories;
+    expect(Object.getPrototypeOf(categories)).toBe(Object.prototype);
+    expect(Object.hasOwn(categories, '__proto__')).toBe(true);
+    expect(categories.__proto__).toBe(2_000);
   });
 
   it('archives options, preserves history, and restores them for new assignments', () => {
@@ -81,8 +79,7 @@ describe('category catalog', () => {
     expect(allCategoryNames(archived)).toEqual(['Groceries']);
     expect(archived.transactions).toEqual(original.transactions);
     expect(archived.planItems).toEqual(original.planItems);
-    expect(archived.snapshots).toEqual(original.snapshots);
-    expect(summarizeMonth(archived, '2026-10', 'budget').categories.Groceries).toBe(1_000);
+    expect(summarizeMonth(archived, '2026-10').categories.Groceries).toBe(1_000);
     expect(() => addCategory(archived, 'groceries', AFTER)).toThrow('archived');
     expect(() => assertAvailableCategory(archived, 'Groceries')).toThrow('available category');
     const restored = restoreCategory(archived, original.categories[0].id, AFTER);
@@ -113,11 +110,11 @@ describe('category catalog', () => {
     expect(validateBackup(data).transactions[0].category).toBe('Groceries');
   });
 
-  it('reimports legacy labels through aliases without restoring archived categories', () => {
+  it('reimports previous labels through aliases without restoring archived categories', () => {
     let data = state();
     data = renameCategory(data, data.categories[0].id, 'Supermarket', LATER);
     data = archiveCategory(data, data.categories[0].id, AFTER);
-    const next = applyImport(data, imported([transaction('expense'), transaction('new')]), 'budget.xlsx', AFTER);
+    const next = applyImport(data, imported([transaction('expense'), transaction('new')]), 'statement.xlsx', AFTER);
     expect(next.categories).toHaveLength(1);
     expect(next.categories[0].archivedAt).toBe(AFTER.toISOString());
     expect(next.transactions.find(item => item.id === 'new')?.category).toBe('Supermarket');
@@ -133,11 +130,11 @@ describe('category catalog', () => {
     let local = renameCategory(initial, initial.categories[0].id, 'Supermarket', LATER);
     local = archiveCategory(local, local.categories[0].id, AFTER);
     local = addCategory(local, 'Health', AFTER);
-    const legacy: any = state();
-    delete legacy.categories;
-    legacy.updatedAt = '2026-10-30T00:00:00.000Z';
-    legacy.transactions.push({ ...transaction('legacy-new'), updatedAt: legacy.updatedAt });
-    const remote = addCategory(validateBackup(legacy), 'Housing', AFTER);
+    const previous: any = state();
+    delete previous.categories;
+    previous.updatedAt = '2026-10-30T00:00:00.000Z';
+    previous.transactions.push({ ...transaction('previous-new'), updatedAt: previous.updatedAt });
+    const remote = addCategory(validateBackup(previous), 'Housing', AFTER);
     const merged = mergeFinanceData(local, remote);
     expect(allCategoryNames(merged)).toEqual(['Health', 'Housing', 'Supermarket']);
     expect(availableCategoryNames(merged)).toEqual(['Health', 'Housing']);

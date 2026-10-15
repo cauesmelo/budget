@@ -9,7 +9,7 @@ function workbook(sheets: Record<string, unknown[][]>): XLSX.WorkBook {
   return result;
 }
 
-// Native Portuguese workbook labels below exercise the bank and legacy file contracts.
+// Native Portuguese workbook labels below exercise the bank statement formats.
 function cardRows(): unknown[][] {
   return [
     [null, 'Fatura Aberta - Outubro/2026'],
@@ -36,11 +36,6 @@ describe('Itaú importers', () => {
       source: 'card', sheet: 'Fatura outubro2026', options: { cardMonth: '2026-10' },
       rows: [['Data', 'Lançamento', 'Parcelamento', 'Valor', 'Número do cartão'], ['01/04/2026', 'Compra exemplo', '1/2', 123.45, '1234']],
       oldAccount: 'Cartão Itaú ****1234', account: 'Itaú card ****1234', fingerprint: 'v1-3426b5cea16fc8bd',
-    },
-    {
-      source: 'budget', sheet: 'Abril', options: { referenceYear: 2026 },
-      rows: [['Data', 'Nome', 'Saída', 'Categoria'], ['01/04/2026', 'Compra exemplo', 123.45, 'Mercado']],
-      oldAccount: 'Histórico Budget', account: 'Budget history', fingerprint: 'v1-a21b2b65c47718c4',
     },
   ])('preserves the released $source fingerprint when account display labels change', fixture => {
     // These fingerprints were captured from the previous release with synthetic native-format rows.
@@ -85,7 +80,7 @@ describe('Itaú importers', () => {
       ['Data', 'Histórico', 'Débito', 'Crédito', 'Saldo'],
       ['02/10/2026', 'Example', '12,30', null, '50,00'],
       ['03/10/2026', 'Received payment', null, '20,00', '70,00'],
-    ] }), 'statement.csv');
+    ] }), 'statement.xlsx');
     expect(result.transactions.map(t => t.amountCents)).toEqual([-1230, 2000]);
   });
 
@@ -176,73 +171,21 @@ describe('Itaú importers', () => {
     expect(result.transactions[0].date).toBe('2026-08-05');
   });
 
+  it('rejects unsupported spreadsheet layouts without importing historical data or a plan', () => {
+    const source = workbook({
+      Abril: [['Data', 'Nome', 'Saída', 'Categoria'], ['01/04/2026', 'Example purchase', 25, 'Groceries']],
+      'Orçamento médio prazo': [['Despesas', new Date('2026-10-01T00:00:00Z')], ['Rent', 100]],
+    });
+    expect(() => parseWorkbook(source, 'old-workbook.xlsx')).toThrow('Itaú checking account or card statement');
+  });
+
+  it('rejects file types outside the supported statement formats before reading their contents', async () => {
+    let wasRead = false;
+    await expect(parseImport({ name: 'statement.csv', arrayBuffer: async () => { wasRead = true; return new ArrayBuffer(0); } })).rejects.toThrow('XLS or XLSX');
+    expect(wasRead).toBe(false);
+  });
+
   it('rejects an unrelated workbook with an actionable error', () => {
     expect(() => parseWorkbook(workbook({ Outros: [['Text'], ['Example']] }), 'other.xlsx')).toThrow('Unrecognized format');
-  });
-});
-
-describe('Budget migration', () => {
-  function budget(): XLSX.WorkBook {
-    const input = workbook({
-      Abril: [['Data', 'Nome', 'Saída', 'Categoria'], [new Date('2026-04-02T00:00:00Z'), 'Groceries', 50, 'Groceries']],
-      Maio: [['Finances'], ['Dia', 'Nome', 'Saída', 'Categoria'], ['03', 'Lunch', 30, 'Restaurant'], ['05', 'Aporte', 100, 'Investimentos'], ['06', 'Business trip', 80, 'Work']],
-      Setembro: [['Finances'], ['Dia', 'Lançamento', 'Descrição', 'Saída', 'Categoria'], [4, 'PIX Example', 'Rent', 200, 'Fixed expenses']],
-      'Orçamento médio prazo': [
-        ['Despesas', new Date('2026-09-01T00:00:00Z'), new Date('2026-10-01T00:00:00Z'), new Date('2026-11-01T00:00:00Z')],
-        ['Rent', null, 200, 210],
-        ['Itaucard', 0, 100, 0],
-        ['Aporte mínimo reserva', null, 50, 50],
-        ['Total', 0, 350, 260],
-        ['Resultado', new Date('2026-09-01T00:00:00Z'), new Date('2026-10-01T00:00:00Z'), new Date('2026-11-01T00:00:00Z')],
-        ['Despesas', null, 350, 260],
-        ['Receita', null, 1000, 1000],
-        ['Reserva', null, 500, 1200],
-        ['Resultado Mensal', 0, 650, 740],
-        ['Indicadores'],
-        ['PMS', null, 0.1, 0.2],
-      ],
-    });
-    input.Sheets['Orçamento médio prazo'].D9.f = 'C9+C10+C4';
-    input.Sheets['Orçamento médio prazo'].B9 = { t: 'e', v: 23, f: '#REF!' };
-    return input;
-  }
-
-  it('migrates all monthly layouts and preserves category/description', () => {
-    const result = parseWorkbook(budget(), 'budget-2026.xlsx');
-    expect(result.source).toBe('budget');
-    expect(result.transactions).toHaveLength(5);
-    expect(result.transactions.map(t => t.date)).toEqual(['2026-04-02', '2026-05-03', '2026-05-05', '2026-05-06', '2026-09-04']);
-    expect(result.transactions.at(-1)).toMatchObject({ description: 'Rent', category: 'Fixed expenses', amountCents: -20000 });
-    expect(result.transactions[2].kind).toBe('transfer');
-    expect(result.transactions[3].category).toBe('Work');
-    expect(result.snapshots.find(s => s.month === '2026-05')?.expenseCents).toBe(11000);
-  });
-
-  it('migrates explicit inputs, contribution targets, and initial reserve instead of cached formulas', () => {
-    const result = parseWorkbook(budget(), 'budget-2026.xlsx');
-    expect(result.planItems).toHaveLength(4);
-    expect(result.planItems.find(p => p.name === 'Rent')).toMatchObject({ amounts: { '2026-10': 20000, '2026-11': 21000 }, defaultAmountCents: 21000 });
-    expect(result.planItems.find(p => p.name === 'Aporte mínimo reserva')?.kind).toBe('contribution');
-    expect(result.suggestedSettings).toMatchObject({ initialReserveCents: 50000, reserveStartMonth: '2026-10', horizonMonths: 2 });
-    expect(result.warnings.some(w => w.includes('broken references'))).toBe(true);
-  });
-
-  it('requires a reference year for day-only history when no year is available', () => {
-    const input = workbook({ Maio: [['Dia', 'Nome', 'Saída', 'Categoria'], [3, 'Groceries', 10, 'Groceries']] });
-    expect(() => parseWorkbook(input, 'history.xlsx')).toThrow('reference year');
-    expect(parseWorkbook(input, 'history.xlsx', { referenceYear: 2024 }).transactions[0].date).toBe('2024-05-03');
-    expect(parseWorkbook(input, 'budget-2026.xlsx').transactions[0].date).toBe('2026-05-03');
-  });
-
-  it('preserves the budget sheet competence when the original date falls in another month', () => {
-    const source = workbook({ Abril: [
-      ['Data', 'Nome', 'Saída', 'Categoria'],
-      [new Date('2026-03-31T00:00:00Z'), 'Example purchase', 12.34, 'Groceries'],
-      [new Date('2026-04-02T00:00:00Z'), 'Another purchase', 10, 'Groceries'],
-    ] });
-    const result = parseWorkbook(source, 'budget-2026.xlsx');
-    expect(result.transactions[0]).toMatchObject({ date: '2026-03-31', month: '2026-04', amountCents: -1234 });
-    expect(result.transactions.every(transaction => transaction.month === '2026-04')).toBe(true);
-    expect(result.snapshots[0]).toMatchObject({ month: '2026-04', expenseCents: 2234, categories: { Groceries: 2234 } });
   });
 });

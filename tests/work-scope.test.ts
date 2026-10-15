@@ -21,14 +21,6 @@ function transaction(id: string, amountCents: number, patch: Partial<Transaction
     updatedAt: NOW.toISOString(), ...patch,
   };
 }
-function historical(data: FinanceData): void {
-  data.tracking = { startMonth: '2032-09', legacyIncomePeriods: [], updatedAt: NOW.toISOString() };
-  data.snapshots = [{
-    id: 'example-snapshot', month: MONTH, incomeCents: 80_000, expenseCents: 30_000,
-    categories: { 'Personal shopping': 20_000, 'Business travel': 10_000 }, updatedAt: NOW.toISOString(),
-  }];
-}
-
 describe('personal and reimbursable work classification', () => {
   it('defaults to personal without a configured expense category or explicit work scope', () => {
     const data = fixture();
@@ -87,76 +79,18 @@ describe('personal monthly totals and separate work cash flow', () => {
     expect(data).toEqual(before);
   });
 
-  it('excludes work transfers, deletions, other months and the unselected import source', () => {
+  it('excludes work transfers, deletions and other months', () => {
     const data = fixture();
     data.transactions = [
       transaction('bank-work', -2_000, { scope: 'work' }),
       transaction('card-work', -3_000, { scope: 'work', source: 'card' }),
-      transaction('budget-work', -9_000, { scope: 'work', source: 'budget' }),
       transaction('transfer', -4_000, { scope: 'work', kind: 'transfer' }),
       transaction('deleted', 6_000, { scope: 'work', deletedAt: NOW.toISOString() }),
       transaction('other-month', -7_000, { scope: 'work', month: '2032-07', date: '2032-07-10' }),
     ];
     expect(summarizeMonth(data, MONTH)).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0, workInCents: 0, workOutCents: 5_000, workNetCents: -5_000 });
-    expect(summarizeMonth(data, MONTH, 'budget')).toMatchObject({ workOutCents: 9_000, workNetCents: -9_000 });
   });
 
-  it('uses fixed Legacy income and separates manual work corrections from historical personal totals', () => {
-    const data = fixture();
-    historical(data);
-    data.tracking!.legacyIncomePeriods = [{ endMonth: MONTH, incomeCents: 150_000 }];
-    data.transactions = [
-      transaction('historical-expense', -20_000, { source: 'budget' }),
-      transaction('historical-work', -10_000, { source: 'budget', category: 'Business travel' }),
-      transaction('historical-work-income', 3_000, { source: 'budget', scope: 'work' }),
-      transaction('manual-work', -2_000, { source: 'manual', scope: 'work' }),
-      transaction('manual-personal', -1_000, { source: 'manual' }),
-      transaction('duplicate-bank', -10_000, { scope: 'work' }),
-    ];
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ incomeCents: 150_000, expenseCents: 21_000, netCents: 129_000, count: 2, workInCents: 3_000, workOutCents: 12_000, workNetCents: -9_000 });
-    expect(summarizeMonth(data, MONTH, 'transactions')).toMatchObject({ incomeCents: 150_000, expenseCents: 1_000, count: 1, workOutCents: 12_000 });
-    delete data.tracking;
-    expect(summarizeMonth(data, MONTH, 'budget')).toMatchObject({ incomeCents: 80_000, expenseCents: 20_000, count: 1, workOutCents: 10_000 });
-  });
-
-  it('preserves aggregate personal snapshot income when the only income row is a work reimbursement', () => {
-    const data = fixture();
-    historical(data);
-    data.transactions = [transaction('work-income', 3_000, { source: 'budget', scope: 'work' })];
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ incomeCents: 80_000, expenseCents: 0, workInCents: 3_000, workOutCents: 0, count: 0 });
-    data.transactions.push(transaction('personal-income', 100_000, { source: 'budget' }));
-    expect(summarizeMonth(data, MONTH).incomeCents).toBe(100_000);
-    data.transactions[1].deletedAt = NOW.toISOString();
-    expect(summarizeMonth(data, MONTH).incomeCents).toBe(0);
-  });
-
-  it('separates configured expense categories from snapshot-only history and includes manual corrections', () => {
-    const data = fixture();
-    historical(data);
-    data.transactions = [transaction('manual-work', -2_000, { source: 'manual', scope: 'work' }), transaction('manual-personal', -1_000, { source: 'manual' })];
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ incomeCents: 80_000, expenseCents: 21_000, categories: { 'Personal shopping': 21_000 }, count: 1, workInCents: 0, workOutCents: 12_000, workNetCents: -12_000 });
-    data.snapshots[0].expenseCents = 15_000;
-    data.snapshots[0].categories['Business travel'] = -5_000;
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ expenseCents: 21_000, workInCents: 5_000, workOutCents: 2_000, workNetCents: 3_000 });
-  });
-
-  it('matches archived snapshot category aliases and never revives deleted Budget originals', () => {
-    let data = addCategory(fixture(), 'Business travel', NOW);
-    const id = data.categories[0].id;
-    data = archiveCategory(renameCategory(data, id, 'Client visits', LATER), id, LATER);
-    historical(data);
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ expenseCents: 20_000, workOutCents: 10_000 });
-    data.transactions = [transaction('deleted-history', -10_000, { source: 'budget', category: 'Client visits', deletedAt: NOW.toISOString() })];
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ expenseCents: 0, categories: {}, workInCents: 0, workOutCents: 0, workNetCents: 0, count: 0 });
-  });
-
-  it('does not use historical snapshots in a tracked month', () => {
-    const data = fixture();
-    historical(data);
-    data.tracking!.startMonth = MONTH;
-    data.transactions = [transaction('personal-real', -1_000), transaction('work-real', -2_000, { scope: 'work' })];
-    expect(summarizeMonth(data, MONTH)).toMatchObject({ incomeCents: 0, expenseCents: 1_000, workOutCents: 2_000, count: 1 });
-  });
 });
 
 describe('work configuration persistence and synchronization', () => {
@@ -226,7 +160,7 @@ describe('work configuration persistence and synchronization', () => {
   });
 
   it('preserves explicit work and personal classifications when the same source is imported again', () => {
-    const incoming: ImportResult = { source: 'bank', transactions: [transaction('expense', -2_000), transaction('refund', 2_000)], planItems: [], snapshots: [], warnings: [] };
+    const incoming: ImportResult = { source: 'bank', transactions: [transaction('expense', -2_000), transaction('refund', 2_000)], warnings: [] };
     const data = applyImport(fixture(), incoming, 'example-statement.xlsx', NOW);
     data.transactions[0].scope = 'personal';
     data.transactions[1].scope = 'work';

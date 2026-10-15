@@ -1,7 +1,7 @@
 import type { Category, FinanceData, PlanItem } from './types';
 
 // Categories discovered in older backups must not replace a current edit.
-const LEGACY_CLOCK = '1970-01-01T00:00:00.000Z';
+const MIGRATION_CLOCK = '1970-01-01T00:00:00.000Z';
 const compareText = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
 export const categoryNameKey = (name: string): string => name.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
 
@@ -67,11 +67,11 @@ function lookup(catalog: Category[]): Map<string, Category> {
 }
 
 function referencedNames(data: FinanceData): string[] {
-  return [...data.transactions.map(item => item.category), ...data.planItems.map(item => item.category), ...data.snapshots.flatMap(item => Object.keys(item.categories))].filter(name => name.trim());
+  return [...data.transactions.map(item => item.category), ...data.planItems.map(item => item.category)].filter(name => name.trim());
 }
 
-/** Migrates legacy labels and keeps every record linked to the current category name. */
-export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, importedAt = LEGACY_CLOCK): FinanceData {
+/** Adopts referenced labels and keeps records linked to the current category name. */
+export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, importedAt = MIGRATION_CLOCK): FinanceData {
   const next = structuredClone(data);
   next.categories = mergeCategoryCatalog(next.categories ?? [], []);
   const byName = lookup(next.categories);
@@ -85,16 +85,6 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
   }
   next.categories.sort((left, right) => compareText(left.id, right.id));
   for (const item of [...next.transactions, ...next.planItems]) item.category = item.category.trim() ? byName.get(categoryNameKey(item.category))!.name : '';
-  for (const snapshot of next.snapshots) {
-    const amounts: Record<string, number> = {};
-    for (const [name, value] of Object.entries(snapshot.categories)) {
-      const currentName = byName.get(categoryNameKey(name))!.name;
-      const amount = (Object.hasOwn(amounts, currentName) ? amounts[currentName] : 0) + value;
-      if (!Number.isSafeInteger(amount)) throw new Error('The category total exceeds the supported monetary range.');
-      Object.defineProperty(amounts, currentName, { value: amount, enumerable: true, writable: true, configurable: true });
-    }
-    snapshot.categories = amounts;
-  }
   return next;
 }
 
@@ -143,7 +133,6 @@ export function renameCategory(data: FinanceData, id: string, newName: string, n
   const normalized = normalizeCategoryData(next, false);
   for (let index = 0; index < normalized.transactions.length; index++) if (normalized.transactions[index].category !== data.transactions[index].category) normalized.transactions[index].updatedAt = updatedAt;
   for (let index = 0; index < normalized.planItems.length; index++) if (normalized.planItems[index].category !== data.planItems[index].category) normalized.planItems[index].updatedAt = updatedAt;
-  for (let index = 0; index < normalized.snapshots.length; index++) if (JSON.stringify(normalized.snapshots[index].categories) !== JSON.stringify(data.snapshots[index].categories)) normalized.snapshots[index].updatedAt = updatedAt;
   normalized.updatedAt = updatedAt;
   return normalized;
 }
@@ -268,28 +257,6 @@ export function configureFutureCategories(data: FinanceData, configuration: Futu
     changed = true;
   }
   next.planItems.push(...futurePieces);
-  for (const snapshot of next.snapshots) {
-    if (snapshot.month < fromMonth) continue;
-    const amounts: Record<string, number> = {};
-    for (const [name, value] of Object.entries(snapshot.categories)) {
-      const target = futureName(name) || futureName('Uncategorized') || 'Uncategorized';
-      if (target === 'Uncategorized' && !next.categories.some(category => category.name === target)) {
-        const conflict = catalog.get(categoryNameKey(target));
-        if (conflict) throw new Error('The uncategorized snapshot label conflicts with an existing name or alias.');
-        next.categories.push({ id: categoryId(target), name: target, updatedAt, archivedAt: updatedAt });
-        changed = true;
-      }
-      const amount = (Object.hasOwn(amounts, target) ? amounts[target] : 0) + value;
-      if (!Number.isSafeInteger(amount)) throw new Error('The category total exceeds the supported monetary range.');
-      Object.defineProperty(amounts, target, { value: amount, enumerable: true, writable: true, configurable: true });
-    }
-    const originalEntries = Object.entries(snapshot.categories);
-    if (originalEntries.length !== Object.keys(amounts).length || originalEntries.some(([name, value]) => !Object.hasOwn(amounts, name) || amounts[name] !== value)) {
-      snapshot.categories = amounts;
-      snapshot.updatedAt = updatedAt;
-      changed = true;
-    }
-  }
   if (!changed) return data;
   next.updatedAt = updatedAt;
   return next;

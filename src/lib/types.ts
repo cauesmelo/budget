@@ -1,5 +1,5 @@
 export type TransactionKind = 'income' | 'expense' | 'transfer';
-export type TransactionSource = 'bank' | 'card' | 'budget' | 'manual';
+export type TransactionSource = 'bank' | 'card' | 'manual';
 export type TransactionScope = 'personal' | 'work';
 export interface Transaction {
   id: string;
@@ -34,14 +34,6 @@ export interface PlanItem {
   updatedAt: string;
   deletedAt?: string;
 }
-export interface BudgetSnapshot {
-  id: string;
-  month: string;
-  incomeCents: number;
-  expenseCents: number;
-  categories: Record<string, number>;
-  updatedAt: string;
-}
 export interface ImportBatch {
   id: string;
   filename: string;
@@ -66,14 +58,9 @@ export interface Category {
   archivedAt?: string;
   aliases?: string[];
 }
-export interface LegacyIncomePeriod {
-  startMonth?: string;
-  endMonth: string;
-  incomeCents: number;
-}
-export interface TrackingConfiguration {
+export interface ReportingConfiguration {
   startMonth: string;
-  legacyIncomePeriods: LegacyIncomePeriod[];
+  resetId: string;
   updatedAt: string;
 }
 export interface WorkConfiguration {
@@ -86,22 +73,18 @@ export interface FinanceData {
   categories: Category[];
   transactions: Transaction[];
   planItems: PlanItem[];
-  snapshots: BudgetSnapshot[];
   imports: ImportBatch[];
   settings: Settings;
-  tracking?: TrackingConfiguration;
+  reporting?: ReportingConfiguration;
   work?: WorkConfiguration;
   updatedAt: string;
 }
 export interface ImportResult {
   source: TransactionSource;
   transactions: Transaction[];
-  planItems: PlanItem[];
-  snapshots: BudgetSnapshot[];
   warnings: string[];
-  suggestedSettings?: Partial<Settings>;
   summary?: string;
 }
-export interface ImportOptions { cardMonth?: string; referenceYear?: number }
+export interface ImportOptions { cardMonth?: string }
 export interface MonthSummary { month: string; incomeCents: number; expenseCents: number; netCents: number; categories: Record<string, number>; count: number; workInCents: number; workOutCents: number; workNetCents: number }
 export interface ProjectionMonth { month: string; openingCents: number; incomeCents: number; expenseCents: number; returnCents: number; netCents: number; closingCents: number }

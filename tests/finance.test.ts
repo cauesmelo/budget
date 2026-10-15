@@ -13,7 +13,7 @@ const planItem = (id: string, kind: PlanItem['kind'], defaultAmountCents: number
   id, kind, name: 'Plan', category: '', defaultAmountCents, amounts: {}, startMonth: '2026-10',
   updatedAt: NOW.toISOString(), ...patch,
 });
-const result = (transactions: Transaction[] = []): ImportResult => ({ source: 'bank', transactions, planItems: [], snapshots: [], warnings: [] });
+const result = (transactions: Transaction[] = []): ImportResult => ({ source: 'bank', transactions, warnings: [] });
 
 describe('dates and cents', () => {
   it('uses the Sao Paulo month at UTC month boundaries', () => {
@@ -42,7 +42,7 @@ describe('dates and cents', () => {
 });
 
 describe('monthly summary', () => {
-  it('deducts refunds, excludes transfers and card payments, and keeps Budget history separate', () => {
+  it('deducts refunds and excludes transfers, deletions and other months', () => {
     const data = createEmptyData(NOW);
     data.transactions = [
       transaction('salary', 300_000), transaction('purchase', -20_000),
@@ -50,40 +50,12 @@ describe('monthly summary', () => {
       transaction('card', -10_000, { source: 'card' }),
       transaction('payment', -10_000, { kind: 'transfer' }),
       transaction('deleted', -30_000, { deletedAt: NOW.toISOString() }),
-      transaction('legacy', -100_000, { source: 'budget' }),
       transaction('othermonth', -50_000, { month: '2026-09' }),
     ];
     expect(summarizeMonth(data, '2026-10')).toEqual({
       month: '2026-10', incomeCents: 300_000, expenseCents: 25_000, netCents: 275_000,
       categories: { Food: 25_000 }, count: 4, workInCents: 0, workOutCents: 0, workNetCents: 0,
     });
-    expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(100_000);
-    data.snapshots.push({ id: 'snapshot', month: '2026-10', incomeCents: 250_000, expenseCents: 110_000, categories: { General: 110_000 }, updatedAt: NOW.toISOString() });
-    expect(summarizeMonth(data, '2026-10', 'budget').netCents).toBe(150_000);
-    expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({ Food: 100_000 });
-    expect(summarizeMonth(data, '2026-10').expenseCents).toBe(25_000);
-  });
-
-  it('reflects category, type, and deletion changes in Budget records even with existing snapshots', () => {
-    const data = createEmptyData(NOW);
-    data.snapshots = [{ id: 'budget-snapshot', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { Previous: 30_000 }, updatedAt: NOW.toISOString() }];
-    data.transactions = [transaction('budget-1', -10_000, { source: 'budget', category: 'New category' }), transaction('budget-2', -20_000, { source: 'budget', kind: 'transfer' })];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 10_000, netCents: 30_000, categories: { 'New category': 10_000 }, count: 1, workInCents: 0, workOutCents: 0, workNetCents: 0 });
-    data.transactions[0].deletedAt = NOW.toISOString();
-    expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(0);
-    expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({});
-    data.transactions[1].kind = 'income';
-    data.transactions[1].amountCents = 15_000;
-    expect(summarizeMonth(data, '2026-10', 'budget').incomeCents).toBe(15_000);
-    data.transactions[1].deletedAt = NOW.toISOString();
-    expect(summarizeMonth(data, '2026-10', 'budget').incomeCents).toBe(0);
-  });
-
-  it('accepts historical snapshots when the month has no Budget transactions', () => {
-    const data = createEmptyData(NOW);
-    data.snapshots = [{ id: 'snapshot-only', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { History: 30_000 }, updatedAt: NOW.toISOString() }];
-    data.transactions = [transaction('bank-real', -99_000)];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, netCents: 10_000, categories: { History: 30_000 }, count: 0, workInCents: 0, workOutCents: 0, workNetCents: 0 });
   });
 
   it('preserves empty categories and names matching object properties', () => {
@@ -153,17 +125,6 @@ describe('reimporting and synchronization', () => {
     const imported = result([transaction('new-id', -500, { fingerprint: 'fingerprint-existing' }), transaction('new', -400), transaction('new-copy', -400, { fingerprint: 'fingerprint-new' })]);
     expect(previewDuplicateCount(data, imported)).toBe(2);
     expect(applyImport(data, imported, 'file.xlsx', NOW).transactions).toHaveLength(2);
-  });
-
-  it('seeds settings from the first Budget without replacing edits on reimport', () => {
-    const imported = { ...result(), source: 'budget' as const, planItems: [planItem('income', 'income', 10_000)], suggestedSettings: { initialReserveCents: 80_000, googleClientId: 'remote-client' } };
-    let data = createEmptyData(NOW);
-    data.settings.googleClientId = 'local-client';
-    data = applyImport(data, imported, 'budget.xlsx', NOW);
-    expect(data.settings.initialReserveCents).toBe(80_000);
-    expect(data.settings.googleClientId).toBe('local-client');
-    data.settings.initialReserveCents = 100_000;
-    expect(applyImport(data, imported, 'budget.xlsx', NOW).settings.initialReserveCents).toBe(100_000);
   });
 
   it('merges by ID, preserves the latest deletion, and keeps the local Google client', () => {

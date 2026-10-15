@@ -43,8 +43,7 @@ function state(): FinanceData {
     plan('active-plan', 'Groceries'),
     plan('unmapped-plan', 'Old purchase', { kind: 'income', defaultAmountCents: 10_000 }),
   ];
-  data.snapshots = [{ id: 'past-snapshot', month: '2026-09', incomeCents: 0, expenseCents: 1_234, categories: { Housing: 1_234 }, updatedAt: NOW.toISOString() }];
-  data.imports = [{ id: 'initial-receipt', filename: 'example.xlsx', source: 'budget', importedAt: NOW.toISOString(), updatedAt: NOW.toISOString(), count: 6 }];
+  data.imports = [{ id: 'initial-receipt', filename: 'example.xlsx', source: 'bank', importedAt: NOW.toISOString(), updatedAt: NOW.toISOString(), count: 6 }];
   data.settings.googleClientId = 'local-client';
   data.settings.reserveStartMonth = '2026-08';
   data.settings.horizonMonths = 8;
@@ -66,7 +65,6 @@ describe('future category configuration', () => {
     });
     expect(next.categories.find(category => category.name === 'Travel')).not.toHaveProperty('archivedAt');
     expect(next.transactions[0]).toEqual(original.transactions[0]);
-    expect(next.snapshots).toEqual(original.snapshots);
     expect(next.settings).toEqual(original.settings);
     expect(next.imports).toEqual(original.imports);
   });
@@ -173,37 +171,18 @@ describe('future category configuration', () => {
     }
   });
 
-  it('aggregates future snapshots without changing income, expenses, historical snapshots, or catalog choices', () => {
-    const original = state();
-    original.snapshots.push({ id: 'future-snapshot', month: '2026-10', incomeCents: 7_000, expenseCents: 3_000, categories: { Housing: 1_000, Music: 500, 'Old purchase': 1_200, Groceries: 300 }, updatedAt: NOW.toISOString() });
-    const next = configureFutureCategories(original, configuration, LATER);
-    expect(next.snapshots[0]).toEqual(original.snapshots[0]);
-    expect(next.snapshots[1]).toEqual({ ...original.snapshots[1], categories: { 'Fixed costs': 1_000, Subscriptions: 500, Uncategorized: 1_200, Groceries: 300 }, updatedAt: LATER.toISOString() });
-    expect(next.categories.find(category => category.name === 'Uncategorized')?.archivedAt).toBe(LATER.toISOString());
-    expect(availableCategoryNames(next).sort()).toEqual([...configuration.activeNames].sort());
-    expect(configureFutureCategories(next, configuration, AFTER)).toBe(next);
-  });
-
-  it('uses an explicit uncategorized snapshot assignment consistently on repeated runs', () => {
-    const original = state();
-    original.snapshots.push({ id: 'unmapped', month: '2026-10', incomeCents: 0, expenseCents: 1_000, categories: { 'Old purchase': 1_000 }, updatedAt: NOW.toISOString() });
-    const configured = { ...configuration, assignments: { ...configuration.assignments, Uncategorized: 'Groceries' } };
-    const next = configureFutureCategories(original, configured, LATER);
-    expect(next.snapshots[1].categories).toEqual({ Groceries: 1_000 });
-    expect(configureFutureCategories(next, configured, AFTER)).toBe(next);
-  });
-
-  it('supports special snapshot keys and rejects category total overflow', () => {
+  it('supports category names that are special object keys without changing record values', () => {
     let original = state();
     original = addCategory(original, '__proto__', NOW);
-    original.snapshots.push({ id: 'special', month: '2026-10', incomeCents: 0, expenseCents: 500, categories: JSON.parse('{"Housing":200,"__proto__":300}'), updatedAt: NOW.toISOString() });
-    const special = { ...configuration, activeNames: ['__proto__'], assignments: { Housing: '__proto__' } };
-    const next = configureFutureCategories(original, special, LATER);
-    expect(Object.hasOwn(next.snapshots[1].categories, '__proto__')).toBe(true);
-    expect(next.snapshots[1].categories.__proto__).toBe(500);
-    expect(Object.getPrototypeOf(next.snapshots[1].categories)).toBe(Object.prototype);
-    original.snapshots[1].categories = { Housing: Number.MAX_SAFE_INTEGER, Music: 1 };
-    expect(() => configureFutureCategories(original, { ...special, assignments: { Housing: '__proto__', Music: '__proto__' } }, LATER)).toThrow('monetary range');
+    const configured = { ...configuration, activeNames: ['__proto__'], assignments: { Housing: '__proto__', Music: '__proto__' } };
+    const next = configureFutureCategories(original, configured, LATER);
+    expect(next.transactions[0]).toEqual(original.transactions[0]);
+    expect(next.transactions[1]).toEqual({ ...original.transactions[1], category: '__proto__', updatedAt: LATER.toISOString() });
+    expect(next.transactions[5]).toEqual(original.transactions[5]);
+    expect(next.planItems.find(item => item.sourcePlanId === 'spanning')?.category).toBe('__proto__');
+    expect(availableCategoryNames(next)).toEqual(['__proto__']);
+    expect(projectReserve(next)).toEqual(projectReserve(original));
+    expect(configureFutureCategories(next, configured, AFTER)).toBe(next);
   });
 
   it('survives backup restoration and merging an older device without restoring duplicate future cash flows', () => {

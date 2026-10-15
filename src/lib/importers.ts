@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { parseMoneyToCents } from './finance';
 import { canonicalAccountIdentity } from './identity';
-import type { BudgetSnapshot, ImportOptions, ImportResult, PlanItem, Transaction, TransactionKind, TransactionSource } from './types';
+import type { ImportOptions, ImportResult, Transaction, TransactionKind, TransactionSource } from './types';
 
 type Cell = string | number | boolean | Date | null | undefined;
 type Rows = Cell[][];
@@ -47,7 +47,7 @@ function readDate(value: Cell): string | null {
 }
 
 const validMonth = (month: string): boolean => /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
-const emptyResult = (source: TransactionSource): ImportResult => ({ source, transactions: [], planItems: [], snapshots: [], warnings: [] });
+const emptyResult = (source: TransactionSource): ImportResult => ({ source, transactions: [], warnings: [] });
 
 function getRows(sheet: XLSX.WorkSheet): Rows {
   return XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: null, raw: true, blankrows: true });
@@ -207,95 +207,9 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
   return result;
 }
 
-function parseBudget(workbook: XLSX.WorkBook, filename: string, options: ImportOptions): ImportResult | null {
-  const planSheetName = workbook.SheetNames.find(name => /orcamento.*(?:medio|prazo)/.test(normalize(name)));
-  const monthSheets = workbook.SheetNames.filter(name => MONTHS.includes(normalize(name)));
-  if (!planSheetName && !monthSheets.length) return null;
-  const result = emptyResult('budget');
-  const updatedAt = new Date().toISOString();
-  const planRows = planSheetName ? getRows(workbook.Sheets[planSheetName]) : [];
-  const yearFromPlan = planRows.flat().map(readDate).find(Boolean)?.slice(0, 4);
-  const yearFromHistory = monthSheets.flatMap(name => getRows(workbook.Sheets[name]).slice(0, 30).map(row => readDate(row[0]))).find(Boolean)?.slice(0, 4);
-  const inferredYear = options.referenceYear ?? Number(filename.match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1] ?? yearFromPlan ?? yearFromHistory ?? 0);
-  if (monthSheets.length && (inferredYear < 1900 || inferredYear > 2200)) throw new Error('Monthly sheets provide only the day. Enter the reference year to import the history.');
-  const makeTransaction = createTransactionFactory('budget', filename);
-  for (const sheetName of monthSheets) {
-    const rows = getRows(workbook.Sheets[sheetName]);
-    const index = headerIndex(rows, headers => (headers.includes('dia') || headers.includes('data')) && headers.includes('saida') && headers.includes('categoria'));
-    if (index < 0) continue;
-    const headers = rows[index].map(normalize);
-    const dateCol = headers.findIndex(h => h === 'dia' || h === 'data');
-    const labelCol = headers.findIndex(h => h === 'lancamento' || h === 'nome');
-    const descriptionCol = headers.indexOf('descricao');
-    const valueCol = headers.indexOf('saida');
-    const categoryCol = headers.indexOf('categoria');
-    const monthNumber = MONTHS.indexOf(normalize(sheetName)) + 1;
-    const month = `${inferredYear}-${String(monthNumber).padStart(2, '0')}`;
-    const categories: Record<string, number> = {};
-    let expenseCents = 0;
-    for (let i = index + 1; i < rows.length; i++) {
-      const row = rows[i];
-      const date = readDate(row[dateCol]) ?? isoDate(inferredYear, monthNumber, Number(row[dateCol]));
-      const originalDescription = labelCol >= 0 ? text(row[labelCol]) : '';
-      const rawCents = readCents(row[valueCol]);
-      if (!date || !originalDescription || rawCents === null) continue;
-      const category = text(row[categoryCol]);
-      const kind: TransactionKind = normalize(category) === 'investimentos' || isTransfer(originalDescription) ? 'transfer' : 'expense';
-      result.transactions.push(makeTransaction({ date, month, amountCents: -rawCents, kind, account: 'Budget history', originalDescription, description: descriptionCol >= 0 ? text(row[descriptionCol]) : '', category, sourceRow: i + 1 }));
-      if (kind === 'expense') {
-        expenseCents += rawCents;
-        const categoryName = category || 'Uncategorized';
-        categories[categoryName] = (categories[categoryName] ?? 0) + rawCents;
-      }
-    }
-    const snapshot: BudgetSnapshot = { id: `snapshot-${month}`, month, incomeCents: 0, expenseCents, categories, updatedAt };
-    result.snapshots.push(snapshot);
-  }
-  if (monthSheets.length) result.warnings.push('Historical totals were rebuilt from the rows, including every expense category. Investments were marked as transfers. Results may differ from workbook indicators that exclude some categories.');
-  if (planSheetName) {
-    const monthHeader = planRows.findIndex(row => row.filter(v => readDate(v)?.endsWith('-01')).length >= 2);
-    if (monthHeader >= 0) {
-      const monthColumns = planRows[monthHeader].flatMap((cell, col) => { const date = readDate(cell); return date ? [{ col, month: date.slice(0, 7) }] : []; });
-      let inResult = false;
-      for (let i = monthHeader + 1; i < planRows.length; i++) {
-        const row = planRows[i];
-        const name = text(row[0]);
-        const label = normalize(name);
-        if (!name) continue;
-        if (label === 'resultado') { inResult = true; continue; }
-        if (/^(total|despesas|resultado mensal|indicadores|pms|pmr|pi|pnif)$/.test(label)) continue;
-        if (label === 'reserva') {
-          // Cached roll-forward results are not editable initial assumptions.
-          const explicitReserve = monthColumns.find(({ col }) => workbook.Sheets[planSheetName][XLSX.utils.encode_cell({ r: i, c: col })]?.t === 'n' && !workbook.Sheets[planSheetName][XLSX.utils.encode_cell({ r: i, c: col })]?.f);
-          if (explicitReserve) {
-            const reserveCents = readCents(row[explicitReserve.col]);
-            if (reserveCents !== null) result.suggestedSettings = { ...result.suggestedSettings, initialReserveCents: reserveCents, reserveStartMonth: explicitReserve.month, horizonMonths: monthColumns.filter(c => c.month >= explicitReserve.month).length };
-          }
-          continue;
-        }
-        if (inResult && label !== 'receita') continue;
-        const amounts: Record<string, number> = {};
-        for (const { col, month } of monthColumns) { const cents = readCents(row[col]); if (cents !== null) amounts[month] = cents; }
-        const months = Object.keys(amounts).sort();
-        if (!months.length) continue;
-        const kind: PlanItem['kind'] = label === 'receita' ? 'income' : /aporte.*reserva|^investimento/.test(label) ? 'contribution' : 'expense';
-        // Keep the legacy investment category so existing user categories remain unchanged.
-        result.planItems.push({ id: `plan-${stableHash(normalize(name))}`, name, category: kind === 'contribution' ? 'Investimentos' : name, kind, defaultAmountCents: amounts[months.at(-1)!], amounts, startMonth: months[0], endMonth: months.at(-1), updatedAt });
-      }
-      result.warnings.push('The minimum contribution was preserved as a contribution target. As an internal transfer, it is not deducted again from reserve growth; the original workbook already adds it back when calculating the following month.');
-      const invalidCells = Object.entries(workbook.Sheets[planSheetName]).filter(([key, cell]) => !key.startsWith('!') && (cell.t === 'e' || cell.f?.includes('#REF!'))).length;
-      if (invalidCells) result.warnings.push('The original projection contains broken references or division by zero. Formulas were not copied; input values and the first valid explicit reserve were imported.');
-    }
-  }
-  result.summary = `${result.transactions.length} historical transactions, ${result.snapshots.length} months, and ${result.planItems.length} planning items.`;
-  return result;
-}
-
 /** Parses source values only; spreadsheet formulas and embedded instructions are never executed. */
 export function parseWorkbook(workbook: XLSX.WorkBook, filename: string, options: ImportOptions = {}): ImportResult {
   if (options.cardMonth && !validMonth(options.cardMonth)) throw new Error('Invalid budget month. Use YYYY-MM format.');
-  const budget = parseBudget(workbook, filename, options);
-  if (budget) return budget;
   for (const name of workbook.SheetNames) {
     const rows = getRows(workbook.Sheets[name]);
     const card = parseCard(rows, name, filename, options);
@@ -303,17 +217,18 @@ export function parseWorkbook(workbook: XLSX.WorkBook, filename: string, options
     const bank = parseBank(rows, filename);
     if (bank) return bank;
   }
-  throw new Error('Unrecognized format. Use a Budget workbook or an Itau checking account/card statement in XLS, XLSX, or CSV format with headers.');
+  throw new Error('Unrecognized format. Import an Itaú checking account or card statement in XLS or XLSX format with its original headers.');
 }
 
 export async function parseImport(file: File | InputFile, options: ImportOptions = {}): Promise<ImportResult> {
+  if (!/\.xlsx?$/i.test(file.name)) throw new Error('Unsupported file type. Import an Itaú checking account or card statement in XLS or XLSX format.');
   const buffer = await file.arrayBuffer();
   if (buffer.byteLength > 30 * 1024 * 1024) throw new Error('The file exceeds 30 MB. Export a shorter period.');
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: true, cellFormula: true });
   } catch {
-    throw new Error('Could not read the workbook. Check that the file is a valid XLS, XLSX, or CSV and is not password protected.');
+    throw new Error('Could not read the workbook. Check that the file is a valid XLS or XLSX and is not password protected.');
   }
   return parseWorkbook(workbook, file.name, options);
 }

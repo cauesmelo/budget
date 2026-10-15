@@ -1,8 +1,8 @@
 import { createStore, get, set } from 'idb-keyval';
-import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments } from './finance';
+import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments, sanitizeFinanceData } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
-import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, TrackingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
+import type { Category, FinanceData, ImportBatch, PlanItem, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 // The original Portuguese store name is required to read existing local data.
@@ -118,7 +118,7 @@ function transaction(value: unknown, path: string): Transaction {
     month: month(source.month, `${path}.month`),
     amountCents: integer(source.amountCents, `${path}.amountCents`),
     kind: oneOf<TransactionKind>(source.kind, ['income', 'expense', 'transfer'], `${path}.kind`),
-    source: oneOf<TransactionSource>(source.source, ['bank', 'card', 'budget', 'manual'], `${path}.source`),
+    source: oneOf<TransactionSource>(source.source, ['bank', 'card', 'manual'], `${path}.source`),
     account: string(source.account, `${path}.account`),
     originalDescription: string(source.originalDescription, `${path}.originalDescription`),
     description: string(source.description, `${path}.description`),
@@ -147,18 +147,6 @@ function planItem(value: unknown, path: string): PlanItem {
   };
 }
 
-function snapshot(value: unknown, path: string): BudgetSnapshot {
-  const source = object(value, path);
-  return {
-    id: string(source.id, `${path}.id`, false, 1_000),
-    updatedAt: timestamp(source.updatedAt, `${path}.updatedAt`),
-    month: month(source.month, `${path}.month`),
-    incomeCents: integer(source.incomeCents, `${path}.incomeCents`),
-    expenseCents: integer(source.expenseCents, `${path}.expenseCents`),
-    categories: moneyMap(source.categories, `${path}.categories`),
-  };
-}
-
 function importBatch(value: unknown, path: string): ImportBatch {
   const source = object(value, path);
   return {
@@ -166,7 +154,7 @@ function importBatch(value: unknown, path: string): ImportBatch {
     updatedAt: timestamp(source.updatedAt, `${path}.updatedAt`),
     importedAt: timestamp(source.importedAt, `${path}.importedAt`),
     filename: string(source.filename, `${path}.filename`, true, 2_000),
-    source: oneOf<TransactionSource>(source.source, ['bank', 'card', 'budget', 'manual'], `${path}.source`),
+    source: oneOf<TransactionSource>(source.source, ['bank', 'card', 'manual'], `${path}.source`),
     count: integer(source.count, `${path}.count`, 0, 1_000_000),
   };
 }
@@ -207,28 +195,13 @@ function settings(value: unknown): Settings {
   };
 }
 
-function tracking(value: unknown): TrackingConfiguration {
-  const source = object(value, 'tracking');
-  const startMonth = month(source.startMonth, 'tracking.startMonth');
-  if (!Array.isArray(source.legacyIncomePeriods) || source.legacyIncomePeriods.length > 600) fail('tracking.legacyIncomePeriods', 'must be a list of up to 600 historical income periods');
-  const legacyIncomePeriods = source.legacyIncomePeriods.map((entry, index) => {
-    const path = `tracking.legacyIncomePeriods[${index}]`;
-    const period = object(entry, path);
-    const periodStartMonth = period.startMonth === undefined ? undefined : month(period.startMonth, `${path}.startMonth`);
-    const endMonth = month(period.endMonth, `${path}.endMonth`);
-    if (periodStartMonth !== undefined && endMonth < periodStartMonth) fail(path, 'has an end month before its start month');
-    if (endMonth >= startMonth) fail(path, 'must end before tracking starts');
-    return {
-      ...(periodStartMonth !== undefined ? { startMonth: periodStartMonth } : {}),
-      endMonth,
-      incomeCents: integer(period.incomeCents, `${path}.incomeCents`, 0),
-    };
-  });
-  const ordered = [...legacyIncomePeriods].sort((left, right) => (left.startMonth ?? '').localeCompare(right.startMonth ?? ''));
-  for (let index = 1; index < ordered.length; index++) {
-    if (ordered[index].startMonth === undefined || ordered[index - 1].endMonth >= ordered[index].startMonth!) fail('tracking.legacyIncomePeriods', 'contains overlapping periods');
-  }
-  return { startMonth, legacyIncomePeriods, updatedAt: timestamp(source.updatedAt, 'tracking.updatedAt') };
+function reporting(value: unknown): ReportingConfiguration {
+  const source = object(value, 'reporting');
+  return {
+    startMonth: month(source.startMonth, 'reporting.startMonth'),
+    resetId: string(source.resetId, 'reporting.resetId', false, 1_000),
+    updatedAt: timestamp(source.updatedAt, 'reporting.updatedAt'),
+  };
 }
 
 function work(value: unknown): WorkConfiguration {
@@ -260,6 +233,12 @@ function array<T extends { id: string }>(value: unknown, path: string, parse: (e
   });
 }
 
+/** Retired workbook entries are ignored before validating the supported transaction format. */
+function currentRecords(value: unknown, path: string, maximum: number): unknown[] {
+  if (!Array.isArray(value) || value.length > maximum) fail(path, 'must be a list within the size limit');
+  return value.filter(entry => !(entry && typeof entry === 'object' && !Array.isArray(entry) && entry.source === 'budget'));
+}
+
 /** Validates the complete state before restoring or reading data from the cloud. */
 export function validateBackup(payload: unknown): FinanceData {
   let data = payload;
@@ -282,17 +261,16 @@ export function validateBackup(payload: unknown): FinanceData {
   const parsed: FinanceData = {
     version: 1,
     categories,
-    transactions: array(source.transactions, 'transactions', transaction, 200_000),
+    transactions: array(currentRecords(source.transactions, 'transactions', 200_000), 'transactions', transaction, 200_000),
     planItems: array(source.planItems, 'planItems', planItem, 10_000),
-    snapshots: array(source.snapshots, 'snapshots', snapshot, 12_000),
-    imports: array(source.imports, 'imports', importBatch, 20_000),
+    imports: array(currentRecords(source.imports, 'imports', 20_000), 'imports', importBatch, 20_000),
     settings: settings(source.settings),
-    ...(source.tracking !== undefined ? { tracking: tracking(source.tracking) } : {}),
+    ...(source.reporting !== undefined ? { reporting: reporting(source.reporting) } : {}),
     ...(source.work !== undefined ? { work: work(source.work) } : {}),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
   try { parsed.planItems = reconcilePlanSegments(parsed.planItems); }
   catch (error) { fail('planItems', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid segment'); }
-  try { return normalizeCategoryData(parsed, source.categories === undefined); }
+  try { return normalizeCategoryData(sanitizeFinanceData(parsed), source.categories === undefined); }
   catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid category'); }
 }

@@ -120,6 +120,32 @@ describe('Google Drive authorization', () => {
 });
 
 describe('snapshots append-only', () => {
+  it('publishes the fresh reporting epoch without restoring old cloud history, plans or reserve assumptions', async () => {
+    await drive.connectDrive(CLIENT_ID);
+    const local = data();
+    local.reporting = { startMonth: '2026-10', resetId: 'example-reset', updatedAt: '2026-10-15T20:00:00.000Z' };
+    const old = data(transaction('old-record', { updatedAt: '2030-01-01T00:00:00.000Z' }));
+    old.planItems = [{ id: 'old-plan', name: 'Previous plan', category: '', kind: 'expense', defaultAmountCents: 2_000, amounts: {}, startMonth: '2026-10', updatedAt: '2030-01-01T00:00:00.000Z' }];
+    old.settings = { ...old.settings, initialReserveCents: 20_000, reserveGoalCents: 50_000, monthlyReturnPercent: 1, updatedAt: '2030-01-01T00:00:00.000Z' };
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      const request = new URL(url);
+      if (options?.method === 'POST') return response({ id: 'fresh-snapshot', modifiedTime: NOW });
+      if (request.searchParams.get('alt') === 'media') return response(old);
+      return response({ files: [metadata('old-snapshot', 'other-device')] });
+    });
+    const first = await drive.syncDrive(local);
+    const second = await drive.syncDrive(first.data);
+    for (const merged of [first.data, second.data, uploadedData()]) {
+      expect(merged.reporting).toEqual(local.reporting);
+      expect(merged.transactions).toEqual([]);
+      expect(merged.planItems).toEqual([]);
+      expect(merged.settings.initialReserveCents).toBe(0);
+      expect(merged.settings.reserveGoalCents).toBe(0);
+      expect(merged.settings.monthlyReturnPercent).toBe(0);
+    }
+    expect(first.data.settings.googleClientId).toBe(CLIENT_ID);
+  });
+
   it('syncs catalogs, renames, and archives without reviving categories from old backups', async () => {
     await drive.connectDrive(CLIENT_ID);
     let local = data(transaction('local-purchase'));

@@ -12,6 +12,5 @@ export function canonicalAccountIdentity(account: string): string {
   // These Portuguese prefixes are a persisted fingerprint contract, not display labels.
   return normalized
     .replace(/^itau checking account(?=$|[ •])/, 'conta corrente itau')
-    .replace(/^itau card(?=$|[ *])/, 'cartao itau')
-    .replace(/^budget history$/, 'historico budget');
+    .replace(/^itau card(?=$|[ *])/, 'cartao itau');
 }

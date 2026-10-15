@@ -19,11 +19,10 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 
 ## First use
 
-1. In **Import files**, select your Budget workbook. The preview shows historical records and medium-term plan items. Confirm the import.
-2. Choose the **Card billing month** and import the Itaú bank and card statements in `.xls` or `.xlsx` format. Review any warnings and confirm.
-3. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type when necessary.
-4. In **Medium-term plan**, review the opening reserve for the first month, income, expenses, and planning horizon. Edit the expected monthly amounts and follow the charts.
-5. In **Data and cloud**, export a backup or configure the Google Drive connection.
+1. Choose the **Card billing month** and import your Itaú bank and card statements in `.xls` or `.xlsx` format. Review any warnings and confirm.
+2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type and scope when necessary.
+3. In **Medium-term plan**, enter your opening reserve, expected income, expenses, and planning horizon. Edit the monthly amounts and follow the charts.
+4. In **Data and cloud**, export a backup or configure the Google Drive connection.
 
 Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Changes to these fields in a new statement may require review.
 
@@ -31,15 +30,17 @@ Repeated files preserve your edits and do not recreate deleted transactions. Ide
 
 Use **Manage categories**, available in Transactions, Medium-term plan, and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions, manual entries, and plan items share the same list. You can also leave a record **Uncategorized** while reviewing it.
 
-Categories already present in your data and imported workbooks are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
+Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
 Category changes applied from a selected month preserve earlier classifications. Planning items that cross that boundary are split into historical and future intervals with the same amounts and overrides. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
 
-## Legacy and tracked months
+## Reporting period and a fresh start
 
-A saved tracking start month marks earlier months **Legacy**. These months use spreadsheet history and manual corrections; tracked months use account, card, and manual transactions. Each chart month selects its own source automatically. Statement copies of expenses already covered by Legacy history are excluded from that month's total.
+Monthly reports use account, card, and manual transactions. Income is recorded from actual credits; the app has no fixed historical salary assumptions or spreadsheet-history reporting mode. Budget workbooks are no longer an import format.
 
-Legacy income can use fixed monthly amounts for specified historical periods. Each fixed amount replaces the month's income total, including any imported income, without creating artificial salary transactions. The Legacy badge and income note identify these assumptions; **Data and cloud** shows the configured periods. Tracking rules are private financial data and travel with backups and Drive synchronization independently of reserve settings.
+A saved reporting start month excludes earlier reporting months from the overview, charts, manual entries, and statement imports. Card transactions use their billing month, so a purchase made earlier can still belong to the first tracked bill. The overview chart grows from the first reporting month instead of showing earlier history.
+
+A fresh start has its own saved identity. Backups and Drive sync preserve it, so financial records, imports, and planning settings from a previous start cannot repopulate the current budget. Devices using the same start continue to merge edits and deletions normally. Categories and work settings remain independent. Older backup formats are accepted, with retired workbook history and historical income assumptions discarded.
 
 ## Personal and work cash flow
 
@@ -49,18 +50,15 @@ Choose **Personal** or **Work** in the **Scope** selector on each transaction, i
 
 In **Data and cloud**, customize the work label and optionally select expense categories that should default to Work, including archived historical categories. These category rules apply only to expenses; employer names and income descriptions never classify a deposit as a reimbursement. An explicit transaction scope takes priority over category rules. The work label, rules, and individual scopes are private financial data and are saved with backups and Drive synchronization. Older backups preserve the current work configuration when merged.
 
-Legacy months keep their configured personal income assumptions while work expenses are separated from historical spending. This separation does not change the independent medium-term plan; review planned commitments directly in the planning table.
+Work cash flow is separate from the independent medium-term plan; review planned commitments directly in the planning table.
 
 ## How amounts are handled
 
 - Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
 - Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
 - A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.
-- Each reporting month automatically selects Legacy history or tracked statements to avoid counting the same expenses twice. Legacy months retain manual corrections alongside their spreadsheet records.
-- Budget history uses the worksheet month as its reporting month, preserving the original date and all categories. Spending totals are rebuilt from the rows and may differ from workbook indicators that exclude certain categories. Identified investments remain transfers.
 - Planning is independent of actual transactions. Importing a statement does not automatically change your forecast.
 - Closing reserve = opening reserve + planned income − spending expenses + expected return on the opening reserve. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.
-- Migration uses the values available in workbook cells and creates editable fields; it does not execute Excel formulas. Subsequent Budget imports add new records and preserve items already edited in the application.
 - An open card bill can change, and bank transactions can use future processing dates. Import warnings help you review these cases.
 
 ## Cloud storage without a paid server
@@ -77,8 +75,6 @@ The code does not include supplied files, personal statement filenames, real tra
 
 Local data belongs to the browser profile and the site's origin and port. Another browser or a different port has separate storage. Clearing browser data or using an incognito window can erase the local copy. Export a backup or synchronize before doing so.
 
-The initial legacy Budget import records a receipt alongside the data. This receipt travels with backups and synchronization and prevents repeating the initial load, even after imported records are deleted. The initial load preserves existing edits, deletions, categories, and customized local settings.
-
 The application rename automatically migrates local data from the previous version and continues to recognize its backups and older Drive copies. The device ID is also preserved. Newly exported backups use the name `budget-backup-YYYY-MM-DD.json`.
 
 The code is hosted in [cauesmelo/budget](https://github.com/cauesmelo/budget) and can be cloned on other computers. The application does not send your data to GitHub. To use static hosting, publish only the contents of `dist`, without statements or personal data, and register the corresponding HTTPS origin in the OAuth client. The project does not need hosting to run locally.
@@ -92,13 +88,13 @@ npm run build
 
 Tests cover calculations in cents, refunds, contributions, projections, duplicates, migration, deletions, backup validation, and synchronization with mocked Google calls.
 
-Optional tests are available for the three reference files. They read the files directly without copying them into the project:
+Optional tests are available for bank and card statement files. They read the files directly without copying them into the project:
 
 ```sh
 PRIVATE_IMPORT_DIR="/path/outside/the/repository" npm run test:files
 ```
 
-The default filenames are `budget.xlsx`, `statement.xls`, and `invoice.xlsx`. To use other names, set `PRIVATE_BUDGET_FILE`, `PRIVATE_BANK_FILE`, and `PRIVATE_CARD_FILE` in your local environment; do not store personal filenames in the code. Without `PRIVATE_IMPORT_DIR`, private tests are skipped. Real Google authorization can only be validated after configuring your own OAuth client ID.
+The default filenames are `statement.xls` and `invoice.xlsx`. To use other names, set `PRIVATE_BANK_FILE` and `PRIVATE_CARD_FILE` in your local environment; do not store personal filenames in the code. Without `PRIVATE_IMPORT_DIR`, private tests are skipped. Real Google authorization can only be validated after configuring your own OAuth client ID.
 
 ## Structure
 
