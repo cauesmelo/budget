@@ -2,6 +2,7 @@ import { ArrowRight } from 'lucide-react';
 import { formatMoney, formatMonth } from '../lib/finance';
 import { getBudgetComparison, getCategorySpending } from '../lib/insights';
 import type { FinanceData } from '../lib/types';
+import { formatNumber } from '../lib/numbers';
 
 interface BudgetComparisonCardProps {
   data: FinanceData;
@@ -48,8 +49,6 @@ interface CategoryBreakdownProps {
   onReview: (category: string) => void;
 }
 
-const shareFormatter = new Intl.NumberFormat('en', { maximumFractionDigits: 1 });
-
 export function CategoryBreakdown({ categories, onReview }: CategoryBreakdownProps) {
   const spending = getCategorySpending(categories);
   const hasCategories = spending.positive.length > 0 || spending.refunds.length > 0;
@@ -57,7 +56,7 @@ export function CategoryBreakdown({ categories, onReview }: CategoryBreakdownPro
   const spendingRow = (entry: typeof spending.positive[number]) => <li key={entry.name}>
     <button type="button" className="spending-breakdown-category" onClick={() => onReview(entry.name)} aria-label={`Review ${entry.name} transactions`}>
       <span className="spending-breakdown-row"><span className="spending-breakdown-name">{entry.name}</span><strong>{formatMoney(entry.amountCents)}</strong></span>
-      <span className="spending-breakdown-share">{entry.sharePercent < 0.1 ? '<0.1' : shareFormatter.format(entry.sharePercent)}% of spending</span>
+      <span className="spending-breakdown-share">{entry.sharePercent < 0.1 ? '<0,1' : formatNumber(entry.sharePercent, 1)}% of spending</span>
       <span className="spending-breakdown-bar" aria-hidden="true"><span style={{ width: `${entry.sharePercent}%` }} /></span>
     </button>
   </li>;
@@ -67,7 +66,7 @@ export function CategoryBreakdown({ categories, onReview }: CategoryBreakdownPro
     {hasCategories ? <>
       {spending.positive.length > 0 && <>
         <ul className="spending-breakdown-list">{spending.positive.slice(0, 6).map(spendingRow)}</ul>
-        {spending.positive.length > 6 && <details className="spending-breakdown-more"><summary>{spending.positive.length - 6} more categories</summary><ul className="spending-breakdown-list">{spending.positive.slice(6).map(spendingRow)}</ul></details>}
+        {spending.positive.length > 6 && <details className="spending-breakdown-more"><summary>{formatNumber(spending.positive.length - 6)} more categories</summary><ul className="spending-breakdown-list">{spending.positive.slice(6).map(spendingRow)}</ul></details>}
       </>}
       {spending.refunds.length > 0 && <div className="spending-breakdown-refunds">
         <h3>Refunds and credits</h3>

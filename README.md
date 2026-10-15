@@ -97,6 +97,8 @@ Work cash flow is separate from the independent medium-term plan; review planned
 
 ## How amounts are handled
 
+Displayed numbers use Brazilian separators: `1.234,56` for decimals and `1.234.567,89` for currency amounts. Money fields show two decimal places and normalize after Enter or blur; percentage fields accept comma decimals such as `0,5`. Stored values, imports, and JSON backups keep their numeric representation.
+
 - Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
 - Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
 - A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.

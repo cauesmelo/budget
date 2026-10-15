@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Check, CircleHelp, PiggyBank, TrendingUp, Wallet } from 'lucide-react';
 import { formatMoney, formatMonth } from '../lib/finance';
+import { formatNumber, parseLocalizedNumber } from '../lib/numbers';
 import type { FinanceData, PlanningConfiguration, PlanningIndicator, ProjectionMonth } from '../lib/types';
 
 type IndicatorKey = keyof ProjectionMonth['indicators'];
@@ -12,7 +13,7 @@ const indicatorDefinitions: { key: IndicatorKey; acronym: string; name: string; 
   { key: 'pnif', acronym: 'PNIF', name: 'Financial independence assets', formula: 'Annual planned spending ÷ net annual return' },
 ];
 
-const formatPercent = (value: number) => `${value.toLocaleString('en-GB', { maximumFractionDigits: 2 })}%`;
+const formatPercent = (value: number) => `${formatNumber(value, 2)}%`;
 
 function unavailableReason(key: IndicatorKey, row: ProjectionMonth, planning?: PlanningConfiguration) {
   if (row.expenseCents <= 0) return 'Add planned spending to calculate this target.';
@@ -34,14 +35,14 @@ export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onC
   const savedAnnualReturn = data.planning?.annualNetReturnPercent;
   const [age, setAge] = useState(savedAge === undefined ? '' : String(savedAge));
   const [pmrMonths, setPmrMonths] = useState<12 | 20>(savedPmr);
-  const [annualReturn, setAnnualReturn] = useState(savedAnnualReturn === undefined ? '' : String(savedAnnualReturn));
+  const [annualReturn, setAnnualReturn] = useState(savedAnnualReturn === undefined ? '' : formatNumber(savedAnnualReturn));
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
 
   useEffect(() => {
     setAge(savedAge === undefined ? '' : String(savedAge));
     setPmrMonths(savedPmr);
-    setAnnualReturn(savedAnnualReturn === undefined ? '' : String(savedAnnualReturn));
+    setAnnualReturn(savedAnnualReturn === undefined ? '' : formatNumber(savedAnnualReturn));
   }, [savedAge, savedPmr, savedAnnualReturn]);
 
   function changed() { setStatus(''); setError(''); }
@@ -49,7 +50,9 @@ export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onC
   function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setStatus('');
     const parsedAge = age.trim() ? Number(age) : undefined;
-    const parsedReturn = annualReturn.trim() ? Number(annualReturn) : undefined;
+    let parsedReturn: number | undefined;
+    try { parsedReturn = annualReturn.trim() ? parseLocalizedNumber(annualReturn) : undefined; }
+    catch { setError('Enter an annual return such as 4,5, or leave it blank.'); return; }
     if (parsedAge !== undefined && (!Number.isInteger(parsedAge) || parsedAge < 1 || parsedAge > 120)) { setError('Age must be a whole number between 1 and 120, or left blank.'); return; }
     if (parsedReturn !== undefined && (!Number.isFinite(parsedReturn) || parsedReturn < 0 || parsedReturn > 100)) { setError('Annual investment return must be between 0% and 100%, or left blank.'); return; }
     try {
@@ -64,8 +67,8 @@ export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onC
       <label className="field"><span>Age in first planning month</span><input type="number" inputMode="numeric" min="1" max="120" step="1" placeholder="Optional" value={age} onChange={event => { changed(); setAge(event.target.value); }} /><small>Age in {formatMonth(data.settings.reserveStartMonth)}; increases yearly.</small></label>
       <label className="field"><span>PMR coverage</span><select value={pmrMonths} onChange={event => { changed(); setPmrMonths(Number(event.target.value) as 12 | 20); }}><option value="12">12 months of spending</option><option value="20">20 months of spending</option></select><small>Choose the reserve coverage for your situation.</small></label>
       <div>
-        <label className="field"><span>Annual investment return for PNIF (%)</span><input aria-label="Annual investment return for PNIF (%)" aria-describedby={annualReturnHelpId} type="number" inputMode="decimal" min="0" max="100" step="any" placeholder="Leave blank if unsure" value={annualReturn} onChange={event => { changed(); setAnnualReturn(event.target.value); }} /><small id={annualReturnHelpId}>Expected yearly return after inflation, taxes, and fees. Leave blank if unsure; your budget and reserve forecast still work.</small></label>
-        <details className="planning-formulas"><summary>See an example</summary><p>Example only: at 4% a year after inflation, taxes, and fees, R$100,000 would earn R$4,000 a year in today’s buying power. Enter 4 for 4%, not 0.04.</p><p>A higher assumed return lowers the PNIF target. Use a long-term estimate for your own investments.</p></details>
+        <label className="field"><span>Annual investment return for PNIF (%)</span><input aria-label="Annual investment return for PNIF (%)" aria-describedby={annualReturnHelpId} inputMode="decimal" placeholder="Leave blank if unsure" value={annualReturn} onChange={event => { changed(); setAnnualReturn(event.target.value); }} onBlur={() => { if (!annualReturn.trim()) return; try { setAnnualReturn(formatNumber(parseLocalizedNumber(annualReturn))); } catch { /* Keep invalid input visible for form validation. */ } }} /><small id={annualReturnHelpId}>Expected yearly return after inflation, taxes, and fees. Leave blank if unsure; your budget and reserve forecast still work.</small></label>
+        <details className="planning-formulas"><summary>See an example</summary><p>Example only: at 4% a year after inflation, taxes, and fees, R$100.000,00 would earn R$4.000,00 a year in today’s buying power. Enter 4 for 4%, not 0,04.</p><p>A higher assumed return lowers the PNIF target. Use a long-term estimate for your own investments.</p></details>
       </div>
       <button type="submit" className="button">Save assumptions</button>
     </form>

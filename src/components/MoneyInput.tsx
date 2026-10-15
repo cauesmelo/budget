@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseMoneyToCents } from '../lib/finance';
+import { formatMoneyAmount } from '../lib/numbers';
 
 export function MoneyInput({ value, onChange, label }: { value: number; onChange: (n: number) => void | boolean; label: string }) {
   const dirty = useRef(false);
   const previousValue = useRef(value);
-  const format = (amount: number) => (amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, useGrouping: false });
-  const [draft, setDraft] = useState(() => format(value));
+  const [draft, setDraft] = useState(() => formatMoneyAmount(value));
   useEffect(() => {
     if (!dirty.current || previousValue.current !== value) {
       dirty.current = false;
-      const formatted = format(value);
+      const formatted = formatMoneyAmount(value);
       if (draft !== formatted) setDraft(formatted);
     }
     previousValue.current = value;
   });
-  function revert() { dirty.current = false; setDraft(format(value)); }
+  function revert() { dirty.current = false; setDraft(formatMoneyAmount(value)); }
   function commit() {
     if (!dirty.current) return;
     dirty.current = false;

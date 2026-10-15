@@ -206,7 +206,7 @@ function category(value: unknown, path: string): Category {
   if (name !== name.normalize('NFC').trim().replace(/\s+/g, ' ')) fail(`${path}.name`, 'must not contain excess whitespace');
   let aliases: string[] | undefined;
   if (source.aliases !== undefined) {
-    if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'must be a list of up to 1000 previous names');
+    if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'must be a list of up to 1.000 previous names');
     aliases = source.aliases.map((entry, index) => string(entry, `${path}.aliases[${index}]`, false, 500));
   }
   return {
@@ -249,7 +249,7 @@ function work(value: unknown): WorkConfiguration {
   const source = object(value, 'work');
   const label = string(source.label, 'work.label', false, 120);
   if (label !== label.normalize('NFC').trim().replace(/\s+/g, ' ') || /[\u0000-\u001f\u007f]/.test(label)) fail('work.label', 'must contain a readable name without excess whitespace');
-  if (!Array.isArray(source.expenseCategories) || source.expenseCategories.length > 1_000) fail('work.expenseCategories', 'must be a list of up to 1000 category names');
+  if (!Array.isArray(source.expenseCategories) || source.expenseCategories.length > 1_000) fail('work.expenseCategories', 'must be a list of up to 1.000 category names');
   const keys = new Set<string>();
   const expenseCategories = source.expenseCategories.map((entry, index) => {
     const path = `work.expenseCategories[${index}]`;

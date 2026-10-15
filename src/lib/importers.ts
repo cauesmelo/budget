@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { parseMoneyToCents } from './finance';
+import { formatNumber } from './numbers';
 import { canonicalAccountIdentity } from './identity';
 import type { ImportOptions, ImportResult, Transaction, TransactionKind, TransactionSource } from './types';
 
@@ -123,10 +124,10 @@ function parseBank(rows: Rows, filename: string): ImportResult | null {
     const kind: TransactionKind = isTransfer(originalDescription) ? 'transfer' : amountCents < 0 ? 'expense' : 'income';
     result.transactions.push(makeTransaction({ date, month: date.slice(0, 7), amountCents, kind, account, originalDescription, description: '', category: '', sourceRow: i + 1 }));
   }
-  if (skipped) result.warnings.push(`${skipped} row(s) with a date and transaction but no valid amount were skipped.`);
+  if (skipped) result.warnings.push(`${formatNumber(skipped)} row(s) with a date and transaction but no valid amount were skipped.`);
   if (exportedDate && result.transactions.some(t => t.date > exportedDate)) result.warnings.push('The statement contains transactions dated after the file was updated. They were preserved; check whether they are scheduled transactions or bank processing dates.');
   if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Identifiable card payments, investments, and withdrawals were marked as transfers to avoid duplicate expenses or income. Review their transaction types.');
-  result.summary = `${result.transactions.length} checking account transactions. Balances and totals were ignored.`;
+  result.summary = `${formatNumber(result.transactions.length)} checking account transactions. Balances and totals were ignored.`;
   return result;
 }
 
@@ -199,11 +200,11 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
     result.transactions.push(makeTransaction({ date, month, amountCents, kind, account: cardAccount(accountCol >= 0 ? row[accountCol] : null, defaultCard), originalDescription, description: '', category: '', installment, sourceRow: i + 1 }));
   }
   if (metadata.partialCents !== null && Math.abs(positiveCharges - metadata.partialCents) > 1) result.warnings.push('The sum of imported charges differs from the statement total. Check refunds, payments, and transactions before closing the month.');
-  if (skipped) result.warnings.push(`${skipped} dated transaction(s) without a valid amount were skipped.`);
+  if (skipped) result.warnings.push(`${formatNumber(skipped)} dated transaction(s) without a valid amount were skipped.`);
   result.warnings.push('The date is the original purchase date; the budget month is the statement month. Older installment purchases were not recorded again in the purchase month.');
   if (metadata.open) result.warnings.push('This statement is still open. Recent purchases and installments may change before closing; review changed amounts when importing an updated version.');
   if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Statement payments were marked as transfers and are excluded from expenses and income.');
-  result.summary = `${result.transactions.length} card transactions for budget month ${month}.`;
+  result.summary = `${formatNumber(result.transactions.length)} card transactions for budget month ${month}.`;
   return result;
 }
 

@@ -1,12 +1,17 @@
 import type { FinanceData, ImportResult, InstallmentSchedule, MonthSummary, PlanItem, PlanningIndicator, ProjectionMonth, Transaction, TransactionScope } from './types';
 import { categoryNameKey, mergeCategoryCatalog, normalizeCategoryData } from './categories';
 import { canonicalAccountIdentity } from './identity';
+import { formatMoneyAmount } from './numbers';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 /** Amounts use integer cents; transaction signs follow cash flow. */
 export function formatMoney(cents: number): string {
+  if (Number.isSafeInteger(cents)) {
+    const amount = formatMoneyAmount(cents);
+    return cents < 0 ? `-R$\u00a0${amount.slice(1)}` : `R$\u00a0${amount}`;
+  }
   return MONEY_FORMAT.format(cents / 100);
 }
 

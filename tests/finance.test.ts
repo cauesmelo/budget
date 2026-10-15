@@ -25,6 +25,10 @@ describe('dates and cents', () => {
     expect(formatMoney(123456)).toContain('1.234,56');
   });
 
+  it.each([0, 1, -1, 123456, -123456, Number.MAX_SAFE_INTEGER, -Number.MAX_SAFE_INTEGER])('preserves every cent when formatting %s for display and reading it back', cents => {
+    expect(parseMoneyToCents(formatMoney(cents))).toBe(cents);
+  });
+
   it.each([
     ['R$ 1.234,56', 123456], ['-1.234,56', -123456], ['(R$ 1.234,56)', -123456],
     ['1.234,56 D', -123456], ['1.234,56 C', 123456], ['1.234,56-', -123456],

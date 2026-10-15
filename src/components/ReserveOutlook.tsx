@@ -2,6 +2,7 @@ import { formatMoney, formatMonth } from '../lib/finance';
 import { getReserveCoverage, getReserveInsights, type ReserveInsights } from '../lib/insights';
 import type { ProjectionMonth } from '../lib/types';
 import { MoneyInput } from './MoneyInput';
+import { formatNumber } from '../lib/numbers';
 
 interface ReserveOutlookProps {
   rows: ProjectionMonth[];
@@ -17,14 +18,14 @@ export function ReserveOutlook({ rows, goalCents, onGoalChange }: ReserveOutlook
   const { goal, firstShortfall } = insights;
   const coverage = rows.length ? getReserveCoverage(insights.openingCents, rows[0].expenseCents) : null;
   const progress = Math.max(0, Math.min(100, goal.progressPercent ?? 0));
-  const progressText = goal.progressPercent === null ? '' : `${goal.progressPercent.toLocaleString('en-GB', { maximumFractionDigits: 1 })}%`;
+  const progressText = goal.progressPercent === null ? '' : `${formatNumber(goal.progressPercent, 1)}%`;
   const goalStatus = goal.status === 'unset'
     ? 'Add a goal to see when your plan reaches it.'
     : goal.status === 'already-reached'
       ? 'Your starting reserve already meets this goal.'
       : goal.status === 'projected'
         ? `Projected to reach your goal at the ${goal.timing} of ${formatMonth(goal.month!)}.`
-        : `This goal is not reached within the ${rows.length}-month plan.`;
+        : `This goal is not reached within the ${formatNumber(rows.length)}-month plan.`;
 
   return <div className="reserve-outlook">
     <div className="reserve-outlook-main">
@@ -35,7 +36,7 @@ export function ReserveOutlook({ rows, goalCents, onGoalChange }: ReserveOutlook
           <div className="planning-progress reserve-outlook-progress" role="progressbar" aria-label="Reserve goal progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${progressText} of goal from starting reserve`}><span style={{ width: `${progress}%` }} /></div>
           <small>{progressText} of goal, based on your starting reserve.</small>
         </>}
-        {coverage !== null && <p className="reserve-outlook-coverage">Starting reserve covers {coverage.toLocaleString('en-GB', { maximumFractionDigits: 1 })} months of planned spending.</p>}
+        {coverage !== null && <p className="reserve-outlook-coverage">Starting reserve covers {formatNumber(coverage, 1)} months of planned spending.</p>}
       </div>
     </div>
     {(firstShortfall || goal.laterBelowMonth) && <div className="reserve-outlook-warnings">
