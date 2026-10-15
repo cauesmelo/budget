@@ -73,10 +73,6 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .sidebar button:focus-visible,.sidebar a:focus-visible{outline-color:#b5d998}
 .category-popup-search:focus-within{box-shadow:inset 0 0 0 2px var(--green)}
 
-.plan-behavior select{display:block;width:140px}
-.plan-installments-button{font-size:11px;margin-top:10px;gap:8px;white-space:nowrap}
-.plan-installments-button>span{background:#e7eee1;border:1px solid var(--border);border-radius:4px;min-width:21px;padding:1px 5px;text-align:center}
-.plan-calculated{font-size:11px;color:var(--text-secondary)}
 .plan-total.opening td{background:#e0ebd8;color:#254b30;border-top:2px solid #71915d;font-weight:650}
 .planning-assumptions-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
 .planning-assumptions-form .field{margin-bottom:0}
@@ -126,63 +122,24 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .planning-formulas dt{min-width:45px;font-weight:600;color:var(--ink)}
 .planning-formulas dd{margin:0}
 .planning-formulas p{font-size:12px!important}
-.installment-editor{max-width:820px;overscroll-behavior:contain}
-.installment-editor .button{width:auto;margin-top:0}
-.installment-editor-intro{font-size:12px!important;line-height:1.8!important;margin-bottom:20px!important}
-.installment-editor-section{border-top:1px solid var(--border);padding-top:20px;margin-top:22px}
-.installment-editor-section h3{font-size:14px;margin:0 0 14px;color:var(--ink);font-weight:600}
-.installment-editor-section>p{font-size:12px;line-height:1.8;margin-bottom:16px}
-.installment-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.installment-form .field{margin-bottom:0;min-width:0}
-.installment-form-name,.installment-form-help,.installment-form-actions{grid-column:1/-1}
-.installment-form-help{font-size:11px!important;line-height:1.7!important;margin:0!important}
-.installment-form-actions{display:flex;gap:10px;flex-wrap:wrap}
-.installment-editor-heading{display:flex;align-items:baseline;justify-content:space-between;gap:15px;margin-bottom:8px}
-.installment-editor-heading>small{font-size:11px;line-height:1.7;color:var(--muted)}
-.installment-list{border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px}
-.installment-row{display:flex;gap:14px;align-items:center;padding:15px;border-bottom:1px solid var(--border)}
-.installment-row:last-child,.installment-suggestion:last-child{border-bottom:0}
-.installment-details{flex:1;min-width:0}
-.installment-details>strong,.installment-suggestion-details>strong{display:block;font-size:13px;overflow-wrap:anywhere;color:var(--ink);font-weight:600}
-.installment-details>span,.installment-suggestion-details>span{display:block;font-size:12px;margin-top:6px;line-height:1.6;color:var(--text-secondary)}
-.installment-details>small,.installment-suggestion-details>small{display:block;font-size:11px;margin-top:5px;color:var(--muted);line-height:1.7}
-.installment-row-actions{display:flex;flex-shrink:0;gap:5px}
-.installment-editor-empty{background:var(--surface-soft);border:1px dashed var(--border);border-radius:7px;padding:16px;font-size:12px!important;color:var(--text-secondary)!important}
-.installment-suggestions-month{max-width:230px}
-.installment-suggestion{display:flex;gap:13px;padding:16px;align-items:flex-start;border-bottom:1px solid var(--border);cursor:pointer}
-.installment-suggestion:has(input:checked){background:#e7f0df}
-.installment-suggestion input{width:17px;height:17px;margin:2px 0 0;flex-shrink:0;accent-color:var(--green)}
-.installment-suggestion-details{min-width:0}
-.installment-editor-footer{border-top:1px solid var(--border);margin-top:24px;padding-top:20px;display:flex;align-items:center;justify-content:space-between;gap:18px}
-.installment-editor-footer>small{font-size:11px;line-height:1.7;color:var(--muted)}
 @media(max-width:1150px){.planning-indicator-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.planning-money-card{padding:18px}.planning-assumptions-form{gap:16px}.planning-indicator-heading{min-height:45px}}
-@media(max-width:640px){.planning-assumptions-form{grid-template-columns:1fr}.planning-metrics-header{align-items:flex-start;flex-direction:column;gap:15px}.planning-metrics-header h2{font-size:17px}.planning-month-select{width:100%}.planning-money-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.planning-money-card{padding:16px 12px}.planning-money-card .metric-top{font-size:11px;min-height:30px;align-items:flex-start;margin-bottom:12px}.planning-money-card .metric-icon{display:none}.planning-money-card strong{font-size:21px;letter-spacing:-.7px}.planning-money-card small{font-size:11px}.planning-indicator-grid{gap:10px}.planning-indicator-card{padding:17px 13px}.planning-indicator-heading{min-height:65px}.planning-indicator-heading>span{font-size:11px}.planning-indicator-value>strong{font-size:25px}.planning-indicators-table tr>:first-child{padding-left:20px;min-width:165px}.installment-form{grid-template-columns:1fr}.installment-editor{max-height:92vh}.installment-editor-heading{align-items:flex-start;flex-direction:column;gap:0}.installment-editor-heading>small{margin-bottom:12px}.installment-row{padding:13px 11px;gap:7px}.installment-row-actions{gap:0}.installment-row-actions .icon-button{padding:6px}.installment-suggestion{padding:13px}.installment-editor-footer{align-items:flex-start}.installment-editor .button{font-size:12px}}
+@media(max-width:640px){.planning-assumptions-form{grid-template-columns:1fr}.planning-metrics-header{align-items:flex-start;flex-direction:column;gap:15px}.planning-metrics-header h2{font-size:17px}.planning-month-select{width:100%}.planning-money-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.planning-money-card{padding:16px 12px}.planning-money-card .metric-top{font-size:11px;min-height:30px;align-items:flex-start;margin-bottom:12px}.planning-money-card .metric-icon{display:none}.planning-money-card strong{font-size:21px;letter-spacing:-.7px}.planning-money-card small{font-size:11px}.planning-indicator-grid{gap:10px}.planning-indicator-card{padding:17px 13px}.planning-indicator-heading{min-height:65px}.planning-indicator-heading>span{font-size:11px}.planning-indicator-value>strong{font-size:25px}.planning-indicators-table tr>:first-child{padding-left:20px;min-width:165px}}
 
-.planning-cashflow-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
-.planning-cashflow-group{min-width:0}
-.planning-cashflow-group-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px;flex-wrap:wrap}
-.planning-cashflow-group-heading h3{margin:0;font-size:14px;font-weight:600;color:var(--ink)}
-.planning-cashflow-group-heading .text-button{font-size:11px}
-.planning-cashflow-items{display:flex;flex-direction:column;gap:12px}
-.planning-cashflow-item{border:1px solid var(--border);background:var(--surface-soft);border-radius:8px;padding:17px;min-width:0}
-.planning-cashflow-item-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}
-.planning-cashflow-item-heading>strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}
-.planning-cashflow-item-heading>span{font-size:10px;color:var(--text-secondary);white-space:nowrap;border:1px solid var(--border);border-radius:4px;background:var(--surface);padding:3px 6px}
-.planning-cashflow-amounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.planning-cashflow .field{min-width:0;margin-bottom:0}
-.planning-cashflow .field>span{font-size:11px}
-.planning-cashflow input,.planning-cashflow select{width:100%;min-width:0;font-size:12px;background:var(--surface)}
-.planning-cashflow-month-amount{display:flex;align-items:center;gap:3px;min-height:39px}
-.planning-cashflow-month-amount input{font-variant-numeric:tabular-nums}
-.planning-cashflow-month-amount .icon-button{padding:5px;color:var(--green);flex-shrink:0}
-.planning-cashflow-month-amount.overridden input{border-color:#6a8754;background:#e5efda;font-weight:600}
-.planning-cashflow-no-default,.planning-cashflow-inactive{display:flex;align-items:center;min-height:39px;font-size:11px;color:var(--text-secondary);line-height:1.6}
-.planning-cashflow-details{border-top:1px solid var(--border);margin-top:15px;padding-top:12px}
-.planning-cashflow-details summary{font-size:11px;color:var(--green);font-weight:500;cursor:pointer;overflow-wrap:anywhere}
-.planning-cashflow-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
-.planning-cashflow-fields>.field:first-child{grid-column:1/-1}
-.planning-cashflow-delete{margin-top:17px;font-size:11px;color:#9b3d32}
-.planning-cashflow-empty{border:1px dashed var(--border);border-radius:8px;padding:18px;background:var(--surface-soft);font-size:12px!important;line-height:1.8!important}
-.planning-cashflow-note{font-size:11px!important;line-height:1.8!important;margin-top:19px!important;color:var(--text-secondary)!important}
-@media(max-width:900px){.planning-cashflow-groups{grid-template-columns:1fr;gap:23px}}
-@media(max-width:640px){.planning-cashflow-item{padding:15px 12px}.planning-cashflow-amounts{gap:10px}.planning-cashflow-fields{grid-template-columns:1fr}.planning-cashflow-fields>.field:first-child{grid-column:auto}.planning-cashflow-item-heading{align-items:flex-start}.planning-cashflow-month-amount .icon-button{padding:3px}.planning-cashflow-details summary{line-height:1.7}}
+
+.simple-plan-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:20px}
+.simple-plan-inputs .field{margin:0}
+.simple-plan-inputs input{font-size:18px;font-variant-numeric:tabular-nums;padding:12px}
+.simple-plan-options{margin-top:20px;padding-top:15px;border-top:1px solid var(--border)}
+.simple-plan-options>summary{font-size:12px;color:var(--green);cursor:pointer;font-weight:500}
+.simple-plan-options>.settings-grid{margin-top:20px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.simple-plan-table th,.simple-plan-table td{min-width:130px}
+.simple-plan-table th:first-child,.simple-plan-table td:first-child{min-width:220px}
+.simple-plan-table th:last-child,.simple-plan-table td:last-child{min-width:48px;width:48px;padding-inline:9px}
+.simple-plan-label{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.simple-plan-extra>summary{font-size:15px;font-weight:600;color:var(--text-secondary);cursor:pointer}
+.simple-plan-extra-copy{font-size:12px!important;margin:18px 0 15px!important}
+.simple-plan-extra-actions{display:flex;justify-content:flex-end;margin:0 0 18px}
+.simple-plan-extra-actions .button{font-size:11px}
+.simple-plan-indicators{margin-top:24px}
+.simple-plan-indicators>.planning-assumptions:last-child{margin-bottom:0}
+@media(max-width:640px){.simple-plan-inputs{grid-template-columns:1fr 1fr;gap:13px}.simple-plan-inputs .field>span{font-size:11px}.simple-plan-inputs input{font-size:16px;padding:10px;min-width:0}.simple-plan-options>.settings-grid{grid-template-columns:1fr;gap:16px}.simple-plan-options .field>span{min-height:0}.simple-plan-extra>summary{font-size:14px}.simple-plan-extra-actions{justify-content:flex-start}}

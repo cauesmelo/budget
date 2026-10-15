@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronLeft, ChevronRight, Cloud, Download, FileSpreadsheet, FolderUp, LayoutDashboard, Leaf, ListFilter, LoaderCircle, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, TrendingUp, Upload, Wallet, X, Tag } from 'lucide-react';
-import type { FinanceData, ImportResult, PlanItem, ProjectionMonth, Transaction, TransactionKind } from './lib/types';
+import type { FinanceData, ImportResult, PlanItem, Transaction, TransactionKind } from './lib/types';
 import { addMonths, applyImport, createEmptyData, formatMoney, formatMonth, getTransactionScope, mergeFinanceData, parseMoneyToCents, planAmountForMonth, previewDuplicateCount, projectReserve, summarizeMonth } from './lib/finance';
 import { loadData, saveData, serializeBackup, validateBackup } from './lib/storage';
 import { APP_ID } from './lib/identity';
@@ -9,9 +9,9 @@ import { allCategoryNames, assertAvailableCategory, availableCategoryNames, cate
 import { CategorySelect } from './components/CategorySelect';
 import { CategoryManager } from './components/CategoryManager';
 import { WorkSettings } from './components/WorkSettings';
-import { InstallmentEditor } from './components/InstallmentEditor';
 import { MoneyInput } from './components/MoneyInput';
-import { PlanningCashFlowSettings } from './components/PlanningCashFlowSettings';
+import { PlanGrid, PlanGridRow } from './components/PlanGrid';
+import { setPlanMonthAmount, setPlanMonthlyAmount } from './lib/planning';
 import { PlanningAssumptions, PlanningMetrics, PlanningIndicatorsTable } from './components/PlanningInsights';
 import { connectDrive, disconnectDrive, isDriveConnected, syncDrive } from './lib/drive';
 
@@ -45,9 +45,7 @@ function Metric({ label, value, detail, icon, tint = false }: { label: string; v
 function WorkMetric({ label, incoming, outgoing, review }: { label: string; incoming: number; outgoing: number; review: () => void }) {
   return <section className="metric work-metric" aria-label={`${label} cash flow`}><div className="metric-top"><span>{label} in / out</span><span className="metric-icon"><RefreshCw size={18} /></span></div><dl className="work-cash-flow"><div><dt><ArrowDownLeft size={13} /> In</dt><dd>{formatMoney(incoming)}</dd></div><div><dt><ArrowUpRight size={13} /> Out</dt><dd>{formatMoney(outgoing)}</dd></div></dl><button className="text-button" onClick={review}>Review {label} transactions <ArrowRight size={13} /></button><small>Excluded from personal income and expenses</small></section>;
 }
-function PlanningCashChart({ rows }: { rows: ProjectionMonth[] }) {
-  return <section className="panel"><div className="panel-header"><div><h2>Planned income and expenses</h2><p>Compare planned spending with income each month.</p></div></div><div className="chart-legend"><span><i style={{ background: 'var(--green)' }} />Income</span><span><i style={{ background: 'var(--chart-spending)' }} />Spending</span></div><div className="chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 10, right: 15, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={m => formatMonth(m)} minTickGap={35} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} axisLine={false} tickLine={false} width={70} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={v => formatMoney(Number(v))} labelFormatter={m => formatMonth(String(m))} /><Bar dataKey="incomeCents" name="Income" isAnimationActive={false} fill="var(--green)" radius={[4, 4, 0, 0]} maxBarSize={20} /><Bar dataKey="expenseCents" name="Spending" isAnimationActive={false} fill="var(--chart-spending)" radius={[4, 4, 0, 0]} maxBarSize={20} /></BarChart></ResponsiveContainer></div></section>;
-}
+
 function TxTable({ transactions, categories, data, update, remove }: { transactions: Transaction[]; categories: string[]; data: FinanceData; update: (id: string, patch: Partial<Transaction>) => void; remove?: (id: string) => void }) {
   const workLabel = data.work?.label || 'Work';
   return <div className="table-scroll"><table className="tx-table"><thead><tr><th>Date / reporting month</th><th>Transaction</th><th>Description</th><th>Category</th><th>Scope</th><th>Type</th><th className="right">Amount</th>{remove && <th />}</tr></thead><tbody>{transactions.map(tx => {
@@ -95,9 +93,6 @@ export default function App() {
   const [addAmount, setAddAmount] = useState('');
   const [planOffset, setPlanOffset] = useState(0);
   const [planningMonth, setPlanningMonth] = useState('');
-  const [installmentItemId, setInstallmentItemId] = useState<string | null>(null);
-  const installmentTrigger = useRef<HTMLButtonElement | null>(null);
-  const closeInstallmentEditor = useCallback(() => { setInstallmentItemId(null); requestAnimationFrame(() => installmentTrigger.current?.focus()); }, []);
   const fileInput = useRef<HTMLInputElement>(null);
   const backupInput = useRef<HTMLInputElement>(null);
   const channel = useRef<BroadcastChannel | null>(null);
@@ -172,6 +167,26 @@ export default function App() {
       return { ...d, planItems: d.planItems.map(p => p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p) };
     });
   }
+  function editPlanMonthly(id: string, amountCents: number) {
+    return change(current => {
+      const stamp = new Date().toISOString();
+      if (!id) return { ...current, planItems: [...current.planItems, { id: crypto.randomUUID(), name: 'Planned income', category: '', kind: 'income', behavior: 'fixed', defaultAmountCents: amountCents, amounts: {}, startMonth: current.settings.reserveStartMonth, updatedAt: stamp }] };
+      const item = current.planItems.find(row => row.id === id && !row.deletedAt);
+      if (!item) throw new Error('This planning item is no longer available.');
+      return { ...current, planItems: current.planItems.map(row => row.id === id ? setPlanMonthlyAmount(item, amountCents, stamp) : row) };
+    });
+  }
+  function editPlanMonth(id: string, editedMonth: string, amountCents: number) {
+    return change(current => {
+      const stamp = new Date().toISOString();
+      if (!id) return { ...current, planItems: [...current.planItems, { id: crypto.randomUUID(), name: 'Planned income', category: '', kind: 'income', behavior: 'fixed', defaultAmountCents: 0, amounts: { [editedMonth]: amountCents }, startMonth: current.settings.reserveStartMonth, updatedAt: stamp }] };
+      const item = current.planItems.find(row => row.id === id && !row.deletedAt);
+      if (!item) throw new Error('This planning item is no longer available.');
+      const next = validateBackup({ ...current, planItems: current.planItems.map(row => row.id === id ? setPlanMonthAmount(item, editedMonth, amountCents, stamp) : row) });
+      if (planAmountForMonth(next.planItems.find(row => row.id === id)!, editedMonth) !== amountCents) throw new Error('This month is covered by another saved row. Edit that row instead.');
+      return next;
+    });
+  }
   const categories = availableCategoryNames(data);
   const filterCategories = allCategoryNames(data);
   const workLabel = data.work?.label || 'Work';
@@ -184,10 +199,10 @@ export default function App() {
   const filtered = monthTx.filter(t => (!filterCategory || (filterCategory === '__empty' ? !t.category && t.kind !== 'transfer' : t.category === filterCategory.slice(9))) && (!filterSource || t.source === filterSource) && (!filterScope || getTransactionScope(data, t) === filterScope) && `${t.originalDescription} ${t.description} ${t.category}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'))).sort((a, b) => b.date.localeCompare(a.date) || a.originalDescription.localeCompare(b.originalDescription));
   const summary = summarizeMonth(data, month);
   const projection = projectReserve(data);
-  const visiblePlanningMonths = projection.slice(planOffset, planOffset + 6);
+  const visiblePlanOffset = Math.min(planOffset, Math.floor((projection.length - 1) / 6) * 6);
+  const visiblePlanningMonths = projection.slice(visiblePlanOffset, visiblePlanOffset + 6);
   const selectedPlanningMonth = projection.some(row => row.month === planningMonth) ? planningMonth : projection[0].month;
-  const installmentItem = data.planItems.find(item => item.id === installmentItemId && !item.deletedAt && item.behavior === 'installments');
-  const modalOpen = showCategoryManager || Boolean(installmentItem);
+  const modalOpen = showCategoryManager;
   function selectPlanningMonth(nextMonth: string) {
     setPlanningMonth(nextMonth);
     const index = projection.findIndex(row => row.month === nextMonth);
@@ -195,7 +210,10 @@ export default function App() {
   }
   const horizonPlanItems = data.planItems.filter(item => !item.deletedAt && item.startMonth <= projection.at(-1)!.month && (!item.endMonth || item.endMonth >= projection[0].month));
   const expensePlanItems = horizonPlanItems.filter(item => item.kind === 'expense');
-  const cashFlowPlanItems = horizonPlanItems.filter(item => item.kind !== 'expense');
+  const incomePlanItems = horizonPlanItems.filter(item => item.kind === 'income');
+  const targetPlanItems = horizonPlanItems.filter(item => item.kind === 'contribution');
+  const incomeRows: PlanItem[] = incomePlanItems.length ? incomePlanItems : [{ id: '', name: 'Planned income', category: '', kind: 'income', defaultAmountCents: 0, amounts: {}, startMonth: data.settings.reserveStartMonth, updatedAt: data.updatedAt }];
+  const shownMonth = visiblePlanningMonths[0] ?? projection[0];
   const expenseCategories = Object.entries(summary.categories).filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]);
   const monthlyHistory = Array.from({ length: 6 }, (_, i) => addMonths(month, i - 5)).filter(item => !startMonth || item >= startMonth).map(item => summarizeMonth(data, item));
   const savings = summary.incomeCents > 0 ? Math.round(summary.netCents / summary.incomeCents * 100) : null;
@@ -204,7 +222,6 @@ export default function App() {
     setPage('transactions'); setFilterScope(scope); setFilterCategory(uncategorized ? '__empty' : ''); setFilterSource(''); setQuery(''); setOffset(0);
   }
   const finalProjection = projection.at(-1);
-  const goalProgress = data.settings.reserveGoalCents > 0 ? Math.min(100, Math.max(0, data.settings.initialReserveCents / data.settings.reserveGoalCents * 100)) : 0;
   const settingsClientId = data.settings.googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   async function importFiles(files: FileList | File[]) {
@@ -276,7 +293,7 @@ export default function App() {
       <div className="page-content">
       {error && <div role="alert" className="alert error"><span>{error}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => setError('')}><X size={18} /></button></div>}
       {notification && <div role="status" className="alert success"><Check size={18} />{notification}</div>}
-      <div className="page-heading"><div><div className="eyebrow">{page === 'plan' ? 'LOOK AHEAD' : page === 'overview' ? 'ONE STEP AT A TIME' : 'YOUR BUDGET, ORGANIZED'}</div><h1>{page === 'overview' ? 'Clarity for your money.' : page === 'transactions' ? 'Every expense in its place.' : page === 'import' ? 'From your statement to your budget.' : page === 'plan' ? 'Make room for your plans.' : 'Your data, wherever you are.'}</h1><p>{page === 'overview' ? 'Track your month and see where your money goes.' : page === 'transactions' ? 'Review transactions and add categories and descriptions.' : page === 'import' ? 'Import your Itaú account and card statements.' : page === 'plan' ? 'Plan income, expenses, and how your reserves will grow.' : 'Work in your browser and sync across computers whenever you need.'}</p></div>{['overview', 'transactions'].includes(page) && <Button onClick={() => setPage('import')}><Plus size={17} /> Import statement</Button>}</div>
+      <div className="page-heading"><div><div className="eyebrow">{page === 'plan' ? 'LOOK AHEAD' : page === 'overview' ? 'ONE STEP AT A TIME' : 'YOUR BUDGET, ORGANIZED'}</div><h1>{page === 'overview' ? 'Clarity for your money.' : page === 'transactions' ? 'Every expense in its place.' : page === 'import' ? 'From your statement to your budget.' : page === 'plan' ? 'Make room for your plans.' : 'Your data, wherever you are.'}</h1><p>{page === 'overview' ? 'Track your month and see where your money goes.' : page === 'transactions' ? 'Review transactions and add categories and descriptions.' : page === 'import' ? 'Import your Itaú account and card statements.' : page === 'plan' ? 'Enter your future budget and see how your reserve grows.' : 'Work in your browser and sync across computers whenever you need.'}</p></div>{['overview', 'transactions'].includes(page) && <Button onClick={() => setPage('import')}><Plus size={17} /> Import statement</Button>}</div>
       {['overview', 'transactions'].includes(page) && <div className="period-bar"><div className="month-switch"><button className="icon-button" aria-label="Previous month" disabled={Boolean(startMonth && month <= startMonth)} onClick={() => setMonth(addMonths(month, -1))}><ChevronLeft size={18} /></button><input type="month" aria-label="Selected month" min={startMonth} value={month} onChange={e => e.target.value && (!startMonth || e.target.value >= startMonth) && setMonth(e.target.value)} /><button className="icon-button" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={18} /></button></div><div className="reporting-period">{startMonth ? `Tracking from ${formatMonth(startMonth)}` : 'Account, card, and manual transactions'}</div></div>}
 
       {page === 'overview' && <>
@@ -297,40 +314,47 @@ export default function App() {
       </>}
 
       {page === 'plan' && <>
-        <section className="panel plan-settings"><div className="panel-header"><div><h2>Starting point</h2><p>The reserve is your balance at the start of the first month.</p></div><span className="pill subdued">EDITABLE</span></div><div className="settings-grid"><label className="field"><span>First month</span><input type="month" min={startMonth} value={data.settings.reserveStartMonth} onChange={e => e.target.value && patchSettings({ reserveStartMonth: e.target.value })} /></label><label className="field"><span>Initial reserve (R$)</span><MoneyInput label="Initial reserve" value={data.settings.initialReserveCents} onChange={n => patchSettings({ initialReserveCents: n })} /></label><label className="field"><span>Planning horizon in months</span><input type="number" min="1" max="120" value={data.settings.horizonMonths} onChange={e => patchSettings({ horizonMonths: Math.min(120, Math.max(1, Number(e.target.value) || 1)) })} /></label><label className="field"><span>Expected monthly return (%)</span><input type="number" min="-100" max="100" step="0.01" value={data.settings.monthlyReturnPercent} onChange={e => patchSettings({ monthlyReturnPercent: Math.min(100, Math.max(-100, Number(e.target.value))) })} /></label></div></section>
-        <PlanningAssumptions data={data} onChange={planning => change(current => ({ ...current, planning }))} />
-        <PlanningMetrics rows={projection} planning={data.planning} month={selectedPlanningMonth} onMonthChange={selectPlanningMonth} />
-        <section className="panel plan-table-panel">
-          <div className="panel-header"><div><h2>Your planned expenses</h2><p>Repeat a fixed amount, set amounts by month, or schedule installments with an end date.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
-          <div className="plan-controls"><span>Edit any month to override its calculated amount, including with zero.</span><div><button className="icon-button" disabled={planOffset === 0} onClick={() => setPlanOffset(Math.max(0, planOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={planOffset + 6 >= projection.length} onClick={() => setPlanOffset(planOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
-          <div className="table-scroll"><table className="plan-table"><thead><tr><th>Item</th><th>Behavior</th><th>Start / end</th><th>Default (R$)</th>{visiblePlanningMonths.map(row => <th key={row.month}>{formatMonth(row.month)}</th>)}<th /></tr></thead><tbody>
-            {expensePlanItems.map(item => <tr key={item.id}>
-              <td><input aria-label="Item name" value={item.name} onChange={e => patchPlan(item.id, { name: e.target.value })} />{item.behavior === 'installments' && <button className="text-button plan-installments-button" onClick={event => { installmentTrigger.current = event.currentTarget; setInstallmentItemId(item.id); }}>Manage installments <span>{item.installments?.length ?? 0}</span></button>}</td>
-              <td className="plan-behavior"><select aria-label={`Behavior for ${item.name}`} value={item.behavior ?? 'fixed'} onChange={e => patchPlan(item.id, { behavior: e.target.value as PlanItem['behavior'] })}><option value="fixed">Fixed</option><option value="monthly">By month</option><option value="installments">Installments</option></select></td>
-              <td className="plan-dates"><input aria-label={`Start of ${item.name}`} type="month" value={item.startMonth} onChange={e => e.target.value && patchPlan(item.id, { startMonth: e.target.value })} /><input aria-label={`End of ${item.name}`} type="month" value={item.endMonth || ''} onChange={e => patchPlan(item.id, { endMonth: e.target.value || undefined })} /></td>
-              <td>{item.behavior === 'installments' ? <span className="plan-calculated">From schedules</span> : item.behavior === 'monthly' ? <span className="plan-calculated">Set each month</span> : <MoneyInput label={`Monthly amount for ${item.name}`} value={item.defaultAmountCents} onChange={n => patchPlan(item.id, { defaultAmountCents: Math.max(0, n) })} />}</td>
-              {visiblePlanningMonths.map(row => {
-                const active = row.month >= item.startMonth && (!item.endMonth || row.month <= item.endMonth);
-                const override = Object.hasOwn(item.amounts, row.month);
-                return <td key={row.month} className={override ? 'overridden' : ''}>{active ? <div className="override-cell"><MoneyInput label={`${item.name} in ${row.month}`} value={planAmountForMonth(item, row.month)} onChange={n => patchPlan(item.id, { amounts: { ...item.amounts, [row.month]: Math.max(0, n) } })} />{override && <button className="reset-month" title="Use the calculated amount" aria-label={`Remove override for ${item.name} ${row.month}`} onClick={() => { const amounts = { ...item.amounts }; delete amounts[row.month]; patchPlan(item.id, { amounts }); }}><X size={12} /></button>}</div> : <span className="muted">—</span>}</td>;
-              })}
-              <td><button className="icon-button danger" aria-label={`Delete item ${item.name}`} onClick={() => patchPlan(item.id, { deletedAt: new Date().toISOString() })}><Trash2 size={16} /></button></td>
-            </tr>)}
-            {([
-              ['incomeCents', 'Planned income'], ['expenseCents', 'Planned spending'],
-              ['contributionCents', 'Reserve target'], ['netCents', 'Monthly surplus'],
-              ['availableCents', 'Available after reserve target'], ['openingCents', 'Opening reserve'],
-              ['returnCents', 'Projected return'], ['closingCents', 'Closing reserve'],
-            ] as const).map(([key, label]) => <tr className={`plan-total ${key === 'openingCents' ? 'opening' : key === 'closingCents' ? 'final' : ''}`} key={key}><td colSpan={4}>{label}</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row[key])}</td>)}<td /></tr>)}
-          </tbody></table></div>
-          {!expensePlanItems.length && <Empty title="Add your planned expenses"><p>Start with a recurring expense or an existing card commitment.</p></Empty>}
+        <section className="panel simple-plan-basics">
+          <div className="simple-plan-inputs">
+            <label className="field"><span>Starting reserve (R$)</span><MoneyInput label="Starting reserve" value={data.settings.initialReserveCents} onChange={amount => patchSettings({ initialReserveCents: amount })} /></label>
+            {incomeRows.map(item => <label className="field" key={item.id}><span>{incomeRows.length === 1 ? 'Monthly income (R$)' : `${item.name} per month (R$)`}</span><MoneyInput label={incomeRows.length === 1 ? 'Monthly income' : `Monthly income for ${item.name}`} value={item.behavior === 'monthly' || item.behavior === 'installments' ? 0 : item.defaultAmountCents} onChange={amount => editPlanMonthly(item.id, Math.max(0, amount))} /></label>)}
+          </div>
+          <details className="simple-plan-options"><summary>Forecast settings</summary><div className="settings-grid">
+            <label className="field"><span>First month</span><input aria-label="First planning month" type="month" min={startMonth} value={data.settings.reserveStartMonth} onChange={event => event.target.value && patchSettings({ reserveStartMonth: event.target.value })} /></label>
+            <label className="field"><span>Months to plan</span><input aria-label="Planning horizon" type="number" min="1" max="120" value={data.settings.horizonMonths} onChange={event => patchSettings({ horizonMonths: Math.min(120, Math.max(1, Number(event.target.value) || 1)) })} /></label>
+            <label className="field"><span>Monthly investment return (%)</span><input aria-label="Monthly investment return" type="number" min="-100" max="100" step="0.01" value={data.settings.monthlyReturnPercent} onChange={event => patchSettings({ monthlyReturnPercent: Math.min(100, Math.max(-100, Number(event.target.value))) })} /></label>
+          </div></details>
         </section>
-        <PlanningCashFlowSettings items={cashFlowPlanItems} month={selectedPlanningMonth} onAdd={addPlan} onPatch={patchPlan} />
-        <section className="panel"><div className="panel-header"><div><h2>Reserve at the start of each month</h2><p>Each opening balance comes from the previous month’s closing reserve.</p></div></div><div className="chart tall"><ResponsiveContainer width="100%" height="100%"><AreaChart data={projection} margin={{ top: 15, right: 15, left: 15, bottom: 5 }}><defs><linearGradient id="reserveGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--green)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--green)" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={m => formatMonth(m)} minTickGap={45} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} width={75} axisLine={false} tickLine={false} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={v => formatMoney(Number(v))} labelFormatter={m => formatMonth(String(m))} /><Area isAnimationActive={false} type="monotone" dataKey="openingCents" name="Opening reserve" stroke="var(--green)" strokeWidth={3} fill="url(#reserveGradient)" /></AreaChart></ResponsiveContainer></div></section>
-        <PlanningCashChart rows={projection} />
-        <section className="panel goal-panel"><div><h2>A goal for your reserve</h2><p>Set the amount you want to save.</p></div><label className="field"><span>Goal (R$)</span><MoneyInput label="Reserve goal" value={data.settings.reserveGoalCents} onChange={n => patchSettings({ reserveGoalCents: Math.max(0, n) })} /></label><div className="goal-progress"><div><span style={{ width: `${goalProgress}%` }} /></div><small>{Math.round(goalProgress)}% covered by your initial reserve{data.settings.reserveGoalCents > 0 && (projection.find(p => p.openingCents >= data.settings.reserveGoalCents) ? ` · goal projected for ${formatMonth(projection.find(p => p.openingCents >= data.settings.reserveGoalCents)!.month)}` : ' · goal not reached within the horizon')}</small></div></section>
-
-        <PlanningIndicatorsTable rows={visiblePlanningMonths} planning={data.planning} />
+        <section className="panel plan-table-panel">
+          <div className="panel-header"><div><h2>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
+          <div className="plan-controls"><span>{formatMonth(visiblePlanningMonths[0].month)} – {formatMonth(visiblePlanningMonths.at(-1)!.month)}</span><div><button className="icon-button" disabled={visiblePlanOffset === 0} onClick={() => setPlanOffset(Math.max(0, visiblePlanOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={visiblePlanOffset + 6 >= projection.length} onClick={() => setPlanOffset(visiblePlanOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
+          <PlanGrid items={expensePlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth}>
+            <tr className="plan-total"><td colSpan={2}>Planned spending</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.expenseCents)}</td>)}<td /></tr>
+            {incomeRows.map(item => <PlanGridRow key={item.id} item={item} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} editableName={false} editableMonthly={false} removable={false} />)}
+            {([
+              ...(incomeRows.length > 1 ? [['incomeCents', 'Total income'] as const] : []),
+              ['netCents', 'Monthly savings'], ['openingCents', 'Reserve at start'], ['closingCents', 'Reserve at end'],
+            ] as const).map(([key, label]) => <tr className={`plan-total ${key === 'closingCents' ? 'final' : ''}`} key={key}><td colSpan={2}>{label}</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row[key])}</td>)}<td /></tr>)}
+          </PlanGrid>
+          {!expensePlanItems.length && <Empty title="Add your planned expenses"><p>Enter what you expect to spend each month.</p></Empty>}
+        </section>
+        <div className="plan-summary simple-plan-summary">
+          <Metric label="Planned spending" value={formatMoney(shownMonth.expenseCents)} detail={formatMonth(shownMonth.month)} icon={<ArrowUpRight size={18} />} />
+          <Metric label="Monthly savings" value={formatMoney(shownMonth.netCents)} detail={`${formatMonth(shownMonth.month)} · income minus expenses`} icon={<TrendingUp size={18} />} />
+          <Metric label="Projected reserve" value={formatMoney(finalProjection?.closingCents ?? 0)} detail={`At the end of ${formatMonth(finalProjection!.month)}`} icon={<Wallet size={18} />} tint />
+        </div>
+        <section className="panel"><div className="panel-header"><div><h2>Reserve growth</h2><p>Your reserve at the start of each month, based on the budget above.</p></div></div><div className="chart tall"><ResponsiveContainer width="100%" height="100%"><AreaChart data={projection} margin={{ top: 15, right: 15, left: 15, bottom: 5 }}><defs><linearGradient id="reserveGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--green)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--green)" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={value => formatMonth(value)} minTickGap={45} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} width={75} axisLine={false} tickLine={false} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={value => formatMoney(Number(value))} labelFormatter={value => formatMonth(String(value))} /><Area isAnimationActive={false} type="monotone" dataKey="openingCents" name="Opening reserve" stroke="var(--green)" strokeWidth={3} fill="url(#reserveGradient)" /></AreaChart></ResponsiveContainer></div></section>
+        <details className="panel simple-plan-extra"><summary>Savings targets</summary><p className="simple-plan-extra-copy">Optional allocations within your savings. These are excluded from spending.</p><div className="simple-plan-extra-actions"><Button secondary onClick={() => addPlan('contribution')}><Plus size={16} /> Add savings target</Button></div>
+          <PlanGrid items={targetPlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth}>
+            <tr className="plan-total"><td colSpan={2}>Savings target</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.contributionCents)}</td>)}<td /></tr>
+            <tr className="plan-total"><td colSpan={2}>Left after savings target</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.availableCents)}</td>)}<td /></tr>
+          </PlanGrid>
+        </details>
+        <details className="panel simple-plan-extra"><summary>Financial indicators</summary><div className="simple-plan-indicators">
+          <PlanningMetrics rows={projection} planning={data.planning} month={selectedPlanningMonth} onMonthChange={selectPlanningMonth} />
+          <PlanningIndicatorsTable rows={visiblePlanningMonths} planning={data.planning} />
+          <PlanningAssumptions data={data} onChange={planning => change(current => ({ ...current, planning }))} />
+        </div></details>
       </>}
 
       {page === 'settings' && <div className="settings-layout">{startMonth && <section className="panel"><div className="panel-header"><div><h2>Reporting period</h2><p>Tracking starts in {formatMonth(startMonth)}.</p></div><FileSpreadsheet size={22} /></div><p>Monthly totals use your account, card, and manual transactions. Record income as it arrives and build your plan from your current commitments.</p></section>}<WorkSettings data={data} onEdit={change} /><section className="panel category-settings-panel"><div><h2>Your categories</h2><p>{categories.length} available · organize transaction categories.</p></div><Button secondary onClick={() => setShowCategoryManager(true)}><Tag size={16} /> Manage categories</Button></section><section className="panel"><div className="panel-header"><div><h2>Google Drive</h2><p>Sync in this app’s private folder</p></div><Cloud size={24} /></div><div className="cloud-status"><span className={`status-dot ${connected ? '' : 'neutral'}`} />{connected ? 'Connected for this session' : 'Not connected yet'}</div><label className="field"><span>Google OAuth client ID</span><input placeholder="Your ID ends with .apps.googleusercontent.com" aria-label="Google client ID" value={settingsClientId} onChange={e => patchSettings({ googleClientId: e.target.value.trim() })} /><small>Set this up once in your Google account. Use the same ID on each computer.</small></label><p className="settings-copy">The app merges local and cloud data before saving a new copy. On another computer, connect Drive and sync before continuing.</p><div className="button-row"><Button disabled={busy || !settingsClientId} onClick={() => void sync()}>{busy ? <LoaderCircle size={17} className="spin" /> : <RefreshCw size={17} />}{connected ? 'Sync now' : 'Connect and sync'}</Button>{connected && <Button secondary onClick={() => { disconnectDrive(); setConnected(false); }}>Disconnect</Button>}</div>{lastSync && <p className="footnote">Last sync in this session: {new Date(lastSync).toLocaleString('pt-BR')}</p>}<details className="setup-details"><summary>Set up without a paid server</summary><ol><li>Create a Google Cloud project and enable the Google Drive API.</li><li>Configure the consent screen and the <code>drive.appdata</code> scope.</li><li>Create a Web application OAuth client with the origin <code>http://localhost:5173</code>.</li><li>In testing mode, add your email as a test user.</li><li>Copy the client ID into the field above. See the details and options in <code>docs/CLOUD.md</code>.</li></ol><p>The API’s free quotas are sufficient for personal use. Files use the storage available in your Google account. Tokens expire, and you may need to authorize again.</p></details></section>
@@ -340,7 +364,6 @@ export default function App() {
       </div>
     </main>
     {showAdd && <div className="modal-backdrop" inert={modalOpen || undefined} aria-hidden={modalOpen || undefined} onClick={() => setShowAdd(false)}><div className="modal panel" role="dialog" aria-modal={!modalOpen} aria-label="New transaction" onClick={e => e.stopPropagation()}><div className="panel-header"><h2>New transaction</h2><button className="icon-button" aria-label="Close" onClick={() => setShowAdd(false)}><X size={20} /></button></div><form onSubmit={e => { e.preventDefault(); submitManual(); }}><label className="field"><span>Type</span><select aria-label="Type for the new transaction" value={addKind} onChange={e => setAddKind(e.target.value as TransactionKind)}><option value="expense">Expense</option><option value="income">{addScope === 'work' ? 'Reimbursement' : 'Income'}</option><option value="transfer">Transfer</option></select></label><label className="field"><span>Scope</span><select aria-label="Scope for the new transaction" value={addScope} onChange={e => setAddScope(e.target.value as 'personal' | 'work')}><option value="personal">Personal</option><option value="work">{workLabel}</option></select><small>Use {workLabel} for reimbursable expenses and reimbursements. Keep salary Personal.</small></label><label className="field"><span>Date</span><input required type="date" min={startMonth ? `${startMonth}-01` : undefined} value={addDate} onChange={e => setAddDate(e.target.value)} /></label><label className="field"><span>Description</span><input required value={addDescription} onChange={e => setAddDescription(e.target.value)} /></label><div className="field"><span>Category</span><CategorySelect label="Category for the new transaction" options={categories} value={addCategory} onChange={setAddCategory} /><button type="button" className="text-button" onClick={() => setShowCategoryManager(true)}><Tag size={14} /> Manage categories</button></div><label className="field"><span>Amount (R$)</span><input required inputMode="decimal" placeholder="0,00" value={addAmount} onChange={e => setAddAmount(e.target.value)} /></label>{error && <div role="alert" className="alert error">{error}</div>}<Button type="submit"><Plus size={16} /> Add transaction</Button></form></div></div>}
-    {installmentItem && <InstallmentEditor data={data} item={installmentItem} onChange={installments => patchPlan(installmentItem.id, { installments })} onClose={closeInstallmentEditor} />}
     {showCategoryManager && <CategoryManager data={data} onEdit={manageCategories} onClose={closeCategoryManager} />}
   </div>;
 }

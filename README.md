@@ -32,23 +32,23 @@ Use **Manage categories**, available in Transactions and Data and cloud, to crea
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
-Planning items use names, dates, and monthly amounts. The expense table displays expenses that overlap the projection horizon, including items with explicit zero amounts. Planned income and reserve targets have separate controls.
+Planning uses expense names, a repeating monthly amount, and editable amounts for individual months. Categories apply to actual transactions.
 
 ## Medium-term planning
 
-The **Your planned expenses** table contains expense rows. **Add expense** creates an expense automatically; no type selection is required. Choose its behavior:
+Enter your **Starting reserve** and **Monthly income**, then add the expenses you expect. The **Monthly (R$)** column repeats the amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
 
-- **Fixed** repeats the default amount throughout the active date range.
-- **By month** uses only the amounts entered for individual months; unset months are zero.
-- **Installments** adds the active purchase schedules and stops each one after its final payment. Use **Manage installments** to enter the payment, first billing month, and remaining payment count, including the first month.
+For a changing card commitment, enter the expected amount directly in each month. Include only installments not already covered by other expense rows. No row type, behavior, or date setup is required. Importing a statement does not automatically change planned amounts or create future actual transactions.
 
-Use **Income and reserve targets** to manage income and internal savings allocations separately. Each existing source or target retains its own default, monthly overrides, and active dates. Use the planning-month selector to edit a specific month; expand an entry’s settings to change its name, behavior, or dates. Existing records keep their saved types and amounts.
+The main page shows planned spending, monthly savings, and the reserve projected at the end of the horizon. The chart shows the reserve at the **beginning** of each month; the closing balance becomes the next month’s opening reserve. Monthly savings are planned income minus spending.
 
-Any monthly amount can override the calculated value, including with zero. Remove the override to restore the calculation. Existing plan rows keep their fixed behavior. Start/end dates constrain every behavior.
+Optional controls stay collapsed:
 
-For an additional card commitment row, include only existing installments that other budget rows do not already cover. The installment editor can suggest personal purchases from a selected imported billing month. Review and select them explicitly; work expenses, transfers, refunds, and already scheduled suggestions are excluded. Suggestions include the selected bill's payment. Matching uses the original purchase details across successive statements; changed statement details and manually entered schedules still require your review. Nothing creates future actual transactions or changes the forecast without your selection.
+- **Forecast settings** changes the first month, horizon, and monthly investment return.
+- **Savings targets** keeps internal allocations separate from spending. They reduce the amount left after the allocation without subtracting savings from total assets again.
+- **Financial indicators** shows the Cerbasi targets and their assumptions.
 
-**Reserve** means money saved at the **beginning** of the month. The selected month's cards show income, spending, surplus, opening reserve, and closing reserve. A reserve target is an internal allocation: it reduces the amount available after the target, but does not subtract savings from total assets again. The table and charts distinguish opening and closing balances.
+Existing data is retained without a migration on load. Older month-specific amounts, finite payments, date limits, and separate income sources keep their calculations. Focusing an amount and leaving it unchanged does not edit the record. Explicitly changing an old row’s repeating amount retains its saved months; editing outside an old date range preserves intervening months. All amounts and original records remain part of backups and synchronization.
 
 The indicators follow [Gustavo Cerbasi's framework](https://www.gustavocerbasi.com.br/livros/4/como-organizar-sua-vida-financeira). This app uses each month's planned spending as the cost-of-living estimate:
 
@@ -61,7 +61,7 @@ The indicators follow [Gustavo Cerbasi's framework](https://www.gustavocerbasi.c
 
 Progress is opening reserve divided by the target. These targets overlap and are not added together. Zero spending leaves progress uncalculated. Enter your age in the first planning month and your net annual return to enable PI and PNIF; neither input is assumed. Age advances once per planning year. PMR defaults to 12 months, with a 20-month option. The annual return sets PNIF's target; the separate expected monthly return projects reserve growth.
 
-Schedules and indicator assumptions are saved locally, in backups, and with Drive sync. A schedule belongs to its budget row; concurrent edits follow the same whole-record timestamp rule as other plan edits. A fresh start discards previous planning assumptions along with the previous plan.
+Budget amounts and indicator assumptions are saved locally, in backups, and with Drive sync. A schedule belongs to its budget row; concurrent edits follow the same whole-record timestamp rule as other plan edits. A fresh start discards previous planning assumptions along with the previous plan.
 
 ## Reporting period and a fresh start
 
