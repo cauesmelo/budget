@@ -28,11 +28,11 @@ Repeated files preserve your edits and do not recreate deleted transactions. Ide
 
 ## Categories
 
-Use **Manage categories**, available in Transactions, Medium-term plan, and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions, manual entries, and plan items share the same list. You can also leave a record **Uncategorized** while reviewing it.
+Use **Manage categories**, available in Transactions and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
-Category changes applied from a selected month preserve earlier classifications. Planning items that cross that boundary are split into historical and future intervals with the same amounts and overrides. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
+Planning items use names, types, dates, and monthly amounts. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
 
 ## Reporting period and a fresh start
 
