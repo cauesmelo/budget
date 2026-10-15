@@ -17,6 +17,12 @@ export interface ReserveInsights {
   firstShortfall: { month: string; amountCents: number; timing: 'start' | 'end' } | null;
 }
 
+export interface PmsReserveInsights extends ReserveInsights {
+  targetStatus: 'available' | 'no-spending' | 'unavailable';
+  hasUnavailableTargets: boolean;
+  laterBelowTiming: 'start' | 'end' | null;
+}
+
 export interface BudgetComparison {
   month: string;
   plannedIncomeCents: number;
@@ -81,6 +87,61 @@ export function getReserveInsights(rows: ProjectionMonth[], goalCents: number): 
       ? { month: firstNegativeClosing.month, amountCents: -firstNegativeClosing.closingCents, timing: 'end' }
       : null;
   return { openingCents, closingCents, growthCents: cents(closingCents - openingCents), goal, firstShortfall };
+}
+
+/** PMS follows each month's calculated spending target, rather than freezing the first target. */
+export function getPmsReserveInsights(rows: ProjectionMonth[]): PmsReserveInsights {
+  const targets = rows.map(row => {
+    const targetCents = row.indicators.pms.targetCents;
+    if (targetCents !== null) {
+      cents(targetCents);
+      if (targetCents < 0) throw new Error('The PMS target cannot be negative.');
+    }
+    return targetCents;
+  });
+  const initialTargetCents = targets[0] ?? null;
+  const insights = getReserveInsights(rows, initialTargetCents ?? 0);
+  const goal = insights.goal;
+  goal.status = targets.some(target => target !== null && target > 0) ? 'outside-horizon' : 'unset';
+  goal.month = null;
+  goal.timing = null;
+  goal.laterBelowMonth = null;
+  let laterBelowTiming: PmsReserveInsights['laterBelowTiming'] = null;
+
+  const reachIndex = rows.findIndex((row, index) => {
+    const target = targets[index];
+    return target !== null && target > 0 && row.openingCents >= target;
+  });
+  if (reachIndex >= 0) {
+    goal.status = reachIndex === 0 ? 'already-reached' : 'projected';
+    goal.month = rows[reachIndex].month;
+    goal.timing = 'start';
+    for (let index = reachIndex; index < rows.length; index++) {
+      const row = rows[index];
+      const target = targets[index];
+      if (target === null || target <= 0) continue;
+      if (row.openingCents < target || row.closingCents < target) {
+        goal.laterBelowMonth = row.month;
+        laterBelowTiming = row.openingCents < target ? 'start' : 'end';
+        break;
+      }
+    }
+  } else {
+    const last = rows.at(-1);
+    const finalTargetCents = targets.at(-1);
+    if (last && finalTargetCents !== undefined && finalTargetCents !== null && finalTargetCents > 0 && last.closingCents >= finalTargetCents) {
+      goal.status = 'projected';
+      goal.month = last.month;
+      goal.timing = 'end';
+    }
+  }
+
+  return {
+    ...insights,
+    targetStatus: initialTargetCents === null ? 'unavailable' : initialTargetCents > 0 ? 'available' : 'no-spending',
+    hasUnavailableTargets: targets.some(target => target === null),
+    laterBelowTiming,
+  };
 }
 
 /** Missing records remain explicit evidence flags; recorded spending is not a completed-month claim. */

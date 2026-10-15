@@ -67,6 +67,7 @@ export interface Settings {
   initialReserveCents: number;
   reserveStartMonth: string;
   monthlyReturnPercent: number;
+  /** Retained for backup compatibility; the reserve outlook uses PMS automatically. */
   reserveGoalCents: number;
   horizonMonths: number;
   googleClientId: string;
