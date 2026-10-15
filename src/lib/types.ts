@@ -64,6 +64,16 @@ export interface Category {
   archivedAt?: string;
   aliases?: string[];
 }
+export interface LegacyIncomePeriod {
+  startMonth?: string;
+  endMonth: string;
+  incomeCents: number;
+}
+export interface TrackingConfiguration {
+  startMonth: string;
+  legacyIncomePeriods: LegacyIncomePeriod[];
+  updatedAt: string;
+}
 export interface FinanceData {
   version: 1;
   categories: Category[];
@@ -72,6 +82,7 @@ export interface FinanceData {
   snapshots: BudgetSnapshot[];
   imports: ImportBatch[];
   settings: Settings;
+  tracking?: TrackingConfiguration;
   updatedAt: string;
 }
 export interface ImportResult {

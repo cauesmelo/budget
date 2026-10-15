@@ -115,26 +115,52 @@ function decimalToCents(text: string, negative: boolean): number {
   return result;
 }
 
-export function summarizeMonth(data: FinanceData, month: string, mode: 'transactions' | 'budget' = 'transactions'): MonthSummary {
+export function isLegacyMonth(data: FinanceData, month: string): boolean {
   if (!isValidMonth(month)) throw new Error('Invalid month.');
+  return data.tracking !== undefined && month < data.tracking.startMonth;
+}
+
+export function resolveMonthMode(data: FinanceData, month: string, mode: 'auto' | 'transactions' | 'budget' = 'auto'): 'transactions' | 'budget' {
+  if (!isValidMonth(month)) throw new Error('Invalid month.');
+  if (mode !== 'auto') return mode;
+  if (data.tracking && !isLegacyMonth(data, month)) return 'transactions';
+  const transactions = data.transactions.filter(item => item.month === month);
+  const hasBudgetHistory = transactions.some(item => item.source === 'budget') || data.snapshots.some(item => item.month === month);
+  if (!hasBudgetHistory) return 'transactions';
+  // Deleted records still identify the source selected for a month.
+  if (isLegacyMonth(data, month) || !transactions.some(item => item.source !== 'budget')) return 'budget';
+  return 'transactions';
+}
+
+export function legacyIncomeForMonth(data: FinanceData, month: string): number | undefined {
+  if (!isLegacyMonth(data, month)) return undefined;
+  return data.tracking!.legacyIncomePeriods.find(period =>
+    (period.startMonth === undefined || month >= period.startMonth) && month <= period.endMonth)?.incomeCents;
+}
+
+export function summarizeMonth(data: FinanceData, month: string, mode: 'auto' | 'transactions' | 'budget' = 'auto'): MonthSummary {
+  if (!isValidMonth(month)) throw new Error('Invalid month.');
+  const sourceMode = resolveMonthMode(data, month, mode);
+  const fixedIncomeCents = legacyIncomeForMonth(data, month);
+  const includeManualCorrections = sourceMode === 'budget' && isLegacyMonth(data, month);
   const originals = data.transactions.filter(item => item.month === month &&
-    (mode === 'budget' ? item.source === 'budget' : item.source !== 'budget'));
+    (sourceMode === 'budget' ? item.source === 'budget' || (includeManualCorrections && item.source === 'manual') : item.source !== 'budget'));
   const transactions = originals.filter(item => !item.deletedAt && item.kind !== 'transfer');
-  let snapshotIncomeCents = 0;
-  if (mode === 'budget') {
+  let incomeCents = 0;
+  let expenseCents = 0;
+  let categories: Record<string, number> = {};
+  if (sourceMode === 'budget') {
     const snapshot = data.snapshots.filter(item => item.month === month).sort((a, b) => compareRecords(a, b)).at(-1);
-    if (snapshot && originals.length === 0) return {
-      month, incomeCents: snapshot.incomeCents, expenseCents: snapshot.expenseCents,
-      netCents: snapshot.incomeCents - snapshot.expenseCents,
-      categories: { ...snapshot.categories }, count: transactions.length,
-    };
+    const budgetOriginals = originals.filter(item => item.source === 'budget');
+    if (snapshot && budgetOriginals.length === 0) {
+      incomeCents = snapshot.incomeCents;
+      expenseCents = snapshot.expenseCents;
+      categories = { ...snapshot.categories };
+    }
     // Editable transactions take precedence, even when all of them have been deleted.
     // An older snapshot may contain aggregated income without income transactions.
-    if (snapshot && !originals.some(item => item.kind === 'income')) snapshotIncomeCents = snapshot.incomeCents;
+    else if (snapshot && !budgetOriginals.some(item => item.kind === 'income')) incomeCents = snapshot.incomeCents;
   }
-  let incomeCents = snapshotIncomeCents;
-  let expenseCents = 0;
-  const categories: Record<string, number> = {};
   for (const transaction of transactions) {
     if (transaction.kind === 'income') incomeCents += transaction.amountCents;
     else {
@@ -144,6 +170,8 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'transact
       Object.defineProperty(categories, category, { value: (Object.hasOwn(categories, category) ? categories[category] : 0) + amount, enumerable: true, writable: true, configurable: true });
     }
   }
+  // A historical income assumption replaces the aggregate without creating transactions.
+  if (fixedIncomeCents !== undefined) incomeCents = fixedIncomeCents;
   return { month, incomeCents, expenseCents, netCents: incomeCents - expenseCents, categories, count: transactions.length };
 }
 
@@ -283,13 +311,15 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
   remote = normalizeCategoryData(remote);
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
-  const pristineLocal = local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
+  const pristineLocal = local.tracking === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
-  const remoteHasSavedState = remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
+  const remoteHasSavedState = remote.tracking !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings;
+  const tracking = local.tracking === undefined ? remote.tracking : remote.tracking === undefined ? local.tracking :
+    compareRecords(local.tracking, remote.tracking) >= 0 ? local.tracking : remote.tracking;
   const merged = {
     version: 1 as const,
     categories: mergeCategoryCatalog(local.categories, remote.categories),
@@ -298,6 +328,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     snapshots: mergeRecords(local.snapshots, remote.snapshots),
     imports: mergeRecords(local.imports, remote.imports),
     settings: { ...settings, googleClientId: local.settings.googleClientId },
+    ...(tracking !== undefined ? { tracking: structuredClone(tracking) } : {}),
     updatedAt: Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local.updatedAt : remote.updatedAt,
   };
   return normalizeCategoryData(merged, false);

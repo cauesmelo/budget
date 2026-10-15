@@ -2,7 +2,7 @@ import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
-import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, Transaction, TransactionKind, TransactionSource } from './types';
+import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, TrackingConfiguration, Transaction, TransactionKind, TransactionSource } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 // The original Portuguese store name is required to read existing local data.
@@ -206,6 +206,30 @@ function settings(value: unknown): Settings {
   };
 }
 
+function tracking(value: unknown): TrackingConfiguration {
+  const source = object(value, 'tracking');
+  const startMonth = month(source.startMonth, 'tracking.startMonth');
+  if (!Array.isArray(source.legacyIncomePeriods) || source.legacyIncomePeriods.length > 600) fail('tracking.legacyIncomePeriods', 'must be a list of up to 600 historical income periods');
+  const legacyIncomePeriods = source.legacyIncomePeriods.map((entry, index) => {
+    const path = `tracking.legacyIncomePeriods[${index}]`;
+    const period = object(entry, path);
+    const periodStartMonth = period.startMonth === undefined ? undefined : month(period.startMonth, `${path}.startMonth`);
+    const endMonth = month(period.endMonth, `${path}.endMonth`);
+    if (periodStartMonth !== undefined && endMonth < periodStartMonth) fail(path, 'has an end month before its start month');
+    if (endMonth >= startMonth) fail(path, 'must end before tracking starts');
+    return {
+      ...(periodStartMonth !== undefined ? { startMonth: periodStartMonth } : {}),
+      endMonth,
+      incomeCents: integer(period.incomeCents, `${path}.incomeCents`, 0),
+    };
+  });
+  const ordered = [...legacyIncomePeriods].sort((left, right) => (left.startMonth ?? '').localeCompare(right.startMonth ?? ''));
+  for (let index = 1; index < ordered.length; index++) {
+    if (ordered[index].startMonth === undefined || ordered[index - 1].endMonth >= ordered[index].startMonth!) fail('tracking.legacyIncomePeriods', 'contains overlapping periods');
+  }
+  return { startMonth, legacyIncomePeriods, updatedAt: timestamp(source.updatedAt, 'tracking.updatedAt') };
+}
+
 function array<T extends { id: string }>(value: unknown, path: string, parse: (entry: unknown, entryPath: string) => T, maximum: number): T[] {
   if (!Array.isArray(value) || value.length > maximum) fail(path, 'must be a list within the size limit');
   const ids = new Set<string>();
@@ -244,6 +268,7 @@ export function validateBackup(payload: unknown): FinanceData {
     snapshots: array(source.snapshots, 'snapshots', snapshot, 12_000),
     imports: array(source.imports, 'imports', importBatch, 20_000),
     settings: settings(source.settings),
+    ...(source.tracking !== undefined ? { tracking: tracking(source.tracking) } : {}),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
   try { parsed.planItems = reconcilePlanSegments(parsed.planItems); }

@@ -35,12 +35,18 @@ Categories already present in your data and imported workbooks are added to the 
 
 Category changes applied from a selected month preserve earlier classifications. Planning items that cross that boundary are split into historical and future intervals with the same amounts and overrides. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
 
+## Legacy and tracked months
+
+A saved tracking start month marks earlier months **Legacy**. These months use spreadsheet history and manual corrections; tracked months use account, card, and manual transactions. Each chart month selects its own source automatically. Statement copies of expenses already covered by Legacy history are excluded from that month's total.
+
+Legacy income can use fixed monthly amounts for specified historical periods. Each fixed amount replaces the month's income total, including any imported income, without creating artificial salary transactions. The Legacy badge and income note identify these assumptions; **Data and cloud** shows the configured periods. Tracking rules are private financial data and travel with backups and Drive synchronization independently of reserve settings.
+
 ## How amounts are handled
 
 - Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
 - Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
 - A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.
-- **Statements and transactions** and **Budget history** have separate views because the workbook already contains expenses that may reappear in statements. The two sources are never added to the same total.
+- Each reporting month automatically selects Legacy history or tracked statements to avoid counting the same expenses twice. Legacy months retain manual corrections alongside their spreadsheet records.
 - Budget history uses the worksheet month as its reporting month, preserving the original date and all categories. Spending totals are rebuilt from the rows and may differ from workbook indicators that exclude certain categories. Identified investments remain transfers.
 - Planning is independent of actual transactions. Importing a statement does not automatically change your forecast.
 - Closing reserve = opening reserve + planned income − spending expenses + expected return on the opening reserve. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.
