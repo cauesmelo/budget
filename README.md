@@ -32,15 +32,17 @@ Use **Manage categories**, available in Transactions and Data and cloud, to crea
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
-Planning items use names, types, dates, and monthly amounts. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
+Planning items use names, dates, and monthly amounts. The expense table displays expenses that overlap the projection horizon, including items with explicit zero amounts. Planned income and reserve targets have separate controls.
 
 ## Medium-term planning
 
-Create one row for each planned income, expense, or reserve allocation. Choose its behavior:
+The **Your planned expenses** table contains expense rows. **Add expense** creates an expense automatically; no type selection is required. Choose its behavior:
 
 - **Fixed** repeats the default amount throughout the active date range.
 - **By month** uses only the amounts entered for individual months; unset months are zero.
 - **Installments** adds the active purchase schedules and stops each one after its final payment. Use **Manage installments** to enter the payment, first billing month, and remaining payment count, including the first month.
+
+Use **Income and reserve targets** to manage income and internal savings allocations separately. Each existing source or target retains its own default, monthly overrides, and active dates. Use the planning-month selector to edit a specific month; expand an entry’s settings to change its name, behavior, or dates. Existing records keep their saved types and amounts.
 
 Any monthly amount can override the calculated value, including with zero. Remove the override to restore the calculation. Existing plan rows keep their fixed behavior. Start/end dates constrain every behavior.
 

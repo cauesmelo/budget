@@ -74,7 +74,6 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .category-popup-search:focus-within{box-shadow:inset 0 0 0 2px var(--green)}
 
 .plan-behavior select{display:block;width:140px}
-.plan-behavior select+select{margin-top:7px}
 .plan-installments-button{font-size:11px;margin-top:10px;gap:8px;white-space:nowrap}
 .plan-installments-button>span{background:#e7eee1;border:1px solid var(--border);border-radius:4px;min-width:21px;padding:1px 5px;text-align:center}
 .plan-calculated{font-size:11px;color:var(--text-secondary)}
@@ -158,3 +157,32 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .installment-editor-footer>small{font-size:11px;line-height:1.7;color:var(--muted)}
 @media(max-width:1150px){.planning-indicator-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.planning-money-card{padding:18px}.planning-assumptions-form{gap:16px}.planning-indicator-heading{min-height:45px}}
 @media(max-width:640px){.planning-assumptions-form{grid-template-columns:1fr}.planning-metrics-header{align-items:flex-start;flex-direction:column;gap:15px}.planning-metrics-header h2{font-size:17px}.planning-month-select{width:100%}.planning-money-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.planning-money-card{padding:16px 12px}.planning-money-card .metric-top{font-size:11px;min-height:30px;align-items:flex-start;margin-bottom:12px}.planning-money-card .metric-icon{display:none}.planning-money-card strong{font-size:21px;letter-spacing:-.7px}.planning-money-card small{font-size:11px}.planning-indicator-grid{gap:10px}.planning-indicator-card{padding:17px 13px}.planning-indicator-heading{min-height:65px}.planning-indicator-heading>span{font-size:11px}.planning-indicator-value>strong{font-size:25px}.planning-indicators-table tr>:first-child{padding-left:20px;min-width:165px}.installment-form{grid-template-columns:1fr}.installment-editor{max-height:92vh}.installment-editor-heading{align-items:flex-start;flex-direction:column;gap:0}.installment-editor-heading>small{margin-bottom:12px}.installment-row{padding:13px 11px;gap:7px}.installment-row-actions{gap:0}.installment-row-actions .icon-button{padding:6px}.installment-suggestion{padding:13px}.installment-editor-footer{align-items:flex-start}.installment-editor .button{font-size:12px}}
+
+.planning-cashflow-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.planning-cashflow-group{min-width:0}
+.planning-cashflow-group-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px;flex-wrap:wrap}
+.planning-cashflow-group-heading h3{margin:0;font-size:14px;font-weight:600;color:var(--ink)}
+.planning-cashflow-group-heading .text-button{font-size:11px}
+.planning-cashflow-items{display:flex;flex-direction:column;gap:12px}
+.planning-cashflow-item{border:1px solid var(--border);background:var(--surface-soft);border-radius:8px;padding:17px;min-width:0}
+.planning-cashflow-item-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}
+.planning-cashflow-item-heading>strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.planning-cashflow-item-heading>span{font-size:10px;color:var(--text-secondary);white-space:nowrap;border:1px solid var(--border);border-radius:4px;background:var(--surface);padding:3px 6px}
+.planning-cashflow-amounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.planning-cashflow .field{min-width:0;margin-bottom:0}
+.planning-cashflow .field>span{font-size:11px}
+.planning-cashflow input,.planning-cashflow select{width:100%;min-width:0;font-size:12px;background:var(--surface)}
+.planning-cashflow-month-amount{display:flex;align-items:center;gap:3px;min-height:39px}
+.planning-cashflow-month-amount input{font-variant-numeric:tabular-nums}
+.planning-cashflow-month-amount .icon-button{padding:5px;color:var(--green);flex-shrink:0}
+.planning-cashflow-month-amount.overridden input{border-color:#6a8754;background:#e5efda;font-weight:600}
+.planning-cashflow-no-default,.planning-cashflow-inactive{display:flex;align-items:center;min-height:39px;font-size:11px;color:var(--text-secondary);line-height:1.6}
+.planning-cashflow-details{border-top:1px solid var(--border);margin-top:15px;padding-top:12px}
+.planning-cashflow-details summary{font-size:11px;color:var(--green);font-weight:500;cursor:pointer;overflow-wrap:anywhere}
+.planning-cashflow-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+.planning-cashflow-fields>.field:first-child{grid-column:1/-1}
+.planning-cashflow-delete{margin-top:17px;font-size:11px;color:#9b3d32}
+.planning-cashflow-empty{border:1px dashed var(--border);border-radius:8px;padding:18px;background:var(--surface-soft);font-size:12px!important;line-height:1.8!important}
+.planning-cashflow-note{font-size:11px!important;line-height:1.8!important;margin-top:19px!important;color:var(--text-secondary)!important}
+@media(max-width:900px){.planning-cashflow-groups{grid-template-columns:1fr;gap:23px}}
+@media(max-width:640px){.planning-cashflow-item{padding:15px 12px}.planning-cashflow-amounts{gap:10px}.planning-cashflow-fields{grid-template-columns:1fr}.planning-cashflow-fields>.field:first-child{grid-column:auto}.planning-cashflow-item-heading{align-items:flex-start}.planning-cashflow-month-amount .icon-button{padding:3px}.planning-cashflow-details summary{line-height:1.7}}

@@ -10,6 +10,8 @@ import { CategorySelect } from './components/CategorySelect';
 import { CategoryManager } from './components/CategoryManager';
 import { WorkSettings } from './components/WorkSettings';
 import { InstallmentEditor } from './components/InstallmentEditor';
+import { MoneyInput } from './components/MoneyInput';
+import { PlanningCashFlowSettings } from './components/PlanningCashFlowSettings';
 import { PlanningAssumptions, PlanningMetrics, PlanningIndicatorsTable } from './components/PlanningInsights';
 import { connectDrive, disconnectDrive, isDriveConnected, syncDrive } from './lib/drive';
 
@@ -36,14 +38,7 @@ function Button({ children, onClick, secondary = false, disabled = false, type =
 function Empty({ title, children }: { title: string; children: ReactNode }) {
   return <div className="empty"><div className="empty-icon"><Leaf size={25} /></div><h3>{title}</h3><div>{children}</div></div>;
 }
-function MoneyInput({ value, onChange, label }: { value: number; onChange: (n: number) => void | boolean; label: string }) {
-  const [draft, setDraft] = useState((value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, useGrouping: false }));
-  useEffect(() => { setDraft((value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, useGrouping: false })); }, [value]);
-  return <input aria-label={label} inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => {
-    try { if (onChange(parseMoneyToCents(draft)) === false) setDraft((value / 100).toFixed(2).replace('.', ',')); }
-    catch { setDraft((value / 100).toFixed(2).replace('.', ',')); }
-  }} />;
-}
+
 function Metric({ label, value, detail, icon, tint = false }: { label: string; value: string; detail: string; icon: ReactNode; tint?: boolean }) {
   return <div className={`metric ${tint ? 'tint' : ''}`}><div className="metric-top"><span>{label}</span><span className="metric-icon">{icon}</span></div><strong>{value}</strong><small>{detail}</small></div>;
 }
@@ -199,6 +194,8 @@ export default function App() {
     if (index >= 0) setPlanOffset(Math.floor(index / 6) * 6);
   }
   const horizonPlanItems = data.planItems.filter(item => !item.deletedAt && item.startMonth <= projection.at(-1)!.month && (!item.endMonth || item.endMonth >= projection[0].month));
+  const expensePlanItems = horizonPlanItems.filter(item => item.kind === 'expense');
+  const cashFlowPlanItems = horizonPlanItems.filter(item => item.kind !== 'expense');
   const expenseCategories = Object.entries(summary.categories).filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]);
   const monthlyHistory = Array.from({ length: 6 }, (_, i) => addMonths(month, i - 5)).filter(item => !startMonth || item >= startMonth).map(item => summarizeMonth(data, item));
   const savings = summary.incomeCents > 0 ? Math.round(summary.netCents / summary.incomeCents * 100) : null;
@@ -265,8 +262,9 @@ export default function App() {
     if (!added) return;
     setShowAdd(false); setError(''); setMonth(addDate.slice(0, 7)); setAddDescription(''); setAddAmount(''); setAddScope('personal'); setNotification('Transaction added.');
   }
-  function addPlan() {
-    const now = new Date().toISOString(); change(d => ({ ...d, planItems: [...d.planItems, { id: crypto.randomUUID(), name: 'New item', category: '', kind: 'expense', defaultAmountCents: 0, amounts: {}, startMonth: d.settings.reserveStartMonth, updatedAt: now }] }));
+  function addPlan(kind: PlanItem['kind'] = 'expense') {
+    const names = { expense: 'New expense', income: 'Planned income', contribution: 'Reserve target' };
+    const now = new Date().toISOString(); change(d => ({ ...d, planItems: [...d.planItems, { id: crypto.randomUUID(), name: names[kind], category: '', kind, defaultAmountCents: 0, amounts: {}, startMonth: d.settings.reserveStartMonth, updatedAt: now }] }));
   }
 
   if (!loaded) return <div className="loading-screen"><LoaderCircle className="spin" /> Loading your finances…{error && <p>{error}</p>}</div>;
@@ -303,12 +301,12 @@ export default function App() {
         <PlanningAssumptions data={data} onChange={planning => change(current => ({ ...current, planning }))} />
         <PlanningMetrics rows={projection} planning={data.planning} month={selectedPlanningMonth} onMonthChange={selectPlanningMonth} />
         <section className="panel plan-table-panel">
-          <div className="panel-header"><div><h2>Your medium-term budget</h2><p>Repeat a fixed amount, set amounts by month, or schedule installments with an end date.</p></div><Button secondary onClick={addPlan}><Plus size={16} /> Add item</Button></div>
-          <div className="plan-controls"><span>Edit any month to override its calculated amount, including with zero. Reserve targets are internal allocations.</span><div><button className="icon-button" disabled={planOffset === 0} onClick={() => setPlanOffset(Math.max(0, planOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={planOffset + 6 >= projection.length} onClick={() => setPlanOffset(planOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
-          <div className="table-scroll"><table className="plan-table"><thead><tr><th>Item</th><th>Type / behavior</th><th>Start / end</th><th>Default (R$)</th>{visiblePlanningMonths.map(row => <th key={row.month}>{formatMonth(row.month)}</th>)}<th /></tr></thead><tbody>
-            {horizonPlanItems.map(item => <tr key={item.id}>
+          <div className="panel-header"><div><h2>Your planned expenses</h2><p>Repeat a fixed amount, set amounts by month, or schedule installments with an end date.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
+          <div className="plan-controls"><span>Edit any month to override its calculated amount, including with zero.</span><div><button className="icon-button" disabled={planOffset === 0} onClick={() => setPlanOffset(Math.max(0, planOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={planOffset + 6 >= projection.length} onClick={() => setPlanOffset(planOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
+          <div className="table-scroll"><table className="plan-table"><thead><tr><th>Item</th><th>Behavior</th><th>Start / end</th><th>Default (R$)</th>{visiblePlanningMonths.map(row => <th key={row.month}>{formatMonth(row.month)}</th>)}<th /></tr></thead><tbody>
+            {expensePlanItems.map(item => <tr key={item.id}>
               <td><input aria-label="Item name" value={item.name} onChange={e => patchPlan(item.id, { name: e.target.value })} />{item.behavior === 'installments' && <button className="text-button plan-installments-button" onClick={event => { installmentTrigger.current = event.currentTarget; setInstallmentItemId(item.id); }}>Manage installments <span>{item.installments?.length ?? 0}</span></button>}</td>
-              <td className="plan-behavior"><select aria-label={`Type for ${item.name}`} value={item.kind} onChange={e => { const kind = e.target.value as PlanItem['kind']; patchPlan(item.id, { kind, ...(kind !== 'expense' && item.behavior === 'installments' ? { behavior: 'fixed' as const } : {}) }); }}><option value="income">Income</option><option value="expense">Expense</option><option value="contribution">Reserve target</option></select><select aria-label={`Behavior for ${item.name}`} value={item.behavior ?? 'fixed'} onChange={e => patchPlan(item.id, { behavior: e.target.value as PlanItem['behavior'] })}><option value="fixed">Fixed</option><option value="monthly">By month</option>{item.kind === 'expense' && <option value="installments">Installments</option>}</select></td>
+              <td className="plan-behavior"><select aria-label={`Behavior for ${item.name}`} value={item.behavior ?? 'fixed'} onChange={e => patchPlan(item.id, { behavior: e.target.value as PlanItem['behavior'] })}><option value="fixed">Fixed</option><option value="monthly">By month</option><option value="installments">Installments</option></select></td>
               <td className="plan-dates"><input aria-label={`Start of ${item.name}`} type="month" value={item.startMonth} onChange={e => e.target.value && patchPlan(item.id, { startMonth: e.target.value })} /><input aria-label={`End of ${item.name}`} type="month" value={item.endMonth || ''} onChange={e => patchPlan(item.id, { endMonth: e.target.value || undefined })} /></td>
               <td>{item.behavior === 'installments' ? <span className="plan-calculated">From schedules</span> : item.behavior === 'monthly' ? <span className="plan-calculated">Set each month</span> : <MoneyInput label={`Monthly amount for ${item.name}`} value={item.defaultAmountCents} onChange={n => patchPlan(item.id, { defaultAmountCents: Math.max(0, n) })} />}</td>
               {visiblePlanningMonths.map(row => {
@@ -325,8 +323,9 @@ export default function App() {
               ['returnCents', 'Projected return'], ['closingCents', 'Closing reserve'],
             ] as const).map(([key, label]) => <tr className={`plan-total ${key === 'openingCents' ? 'opening' : key === 'closingCents' ? 'final' : ''}`} key={key}><td colSpan={4}>{label}</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row[key])}</td>)}<td /></tr>)}
           </tbody></table></div>
-          {!horizonPlanItems.length && <Empty title="Start your plan with your commitments"><p>Add your expected income, expenses, and reserve targets.</p></Empty>}
+          {!expensePlanItems.length && <Empty title="Add your planned expenses"><p>Start with a recurring expense or an existing card commitment.</p></Empty>}
         </section>
+        <PlanningCashFlowSettings items={cashFlowPlanItems} month={selectedPlanningMonth} onAdd={addPlan} onPatch={patchPlan} />
         <section className="panel"><div className="panel-header"><div><h2>Reserve at the start of each month</h2><p>Each opening balance comes from the previous month’s closing reserve.</p></div></div><div className="chart tall"><ResponsiveContainer width="100%" height="100%"><AreaChart data={projection} margin={{ top: 15, right: 15, left: 15, bottom: 5 }}><defs><linearGradient id="reserveGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--green)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--green)" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={m => formatMonth(m)} minTickGap={45} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} width={75} axisLine={false} tickLine={false} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={v => formatMoney(Number(v))} labelFormatter={m => formatMonth(String(m))} /><Area isAnimationActive={false} type="monotone" dataKey="openingCents" name="Opening reserve" stroke="var(--green)" strokeWidth={3} fill="url(#reserveGradient)" /></AreaChart></ResponsiveContainer></div></section>
         <PlanningCashChart rows={projection} />
         <section className="panel goal-panel"><div><h2>A goal for your reserve</h2><p>Set the amount you want to save.</p></div><label className="field"><span>Goal (R$)</span><MoneyInput label="Reserve goal" value={data.settings.reserveGoalCents} onChange={n => patchSettings({ reserveGoalCents: Math.max(0, n) })} /></label><div className="goal-progress"><div><span style={{ width: `${goalProgress}%` }} /></div><small>{Math.round(goalProgress)}% covered by your initial reserve{data.settings.reserveGoalCents > 0 && (projection.find(p => p.openingCents >= data.settings.reserveGoalCents) ? ` · goal projected for ${formatMonth(projection.find(p => p.openingCents >= data.settings.reserveGoalCents)!.month)}` : ' · goal not reached within the horizon')}</small></div></section>
