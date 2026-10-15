@@ -1,5 +1,6 @@
-import type { FinanceData, ImportResult, MonthSummary, PlanItem, ProjectionMonth, Transaction, TransactionScope } from './types';
+import type { FinanceData, ImportResult, InstallmentSchedule, MonthSummary, PlanItem, PlanningIndicator, ProjectionMonth, Transaction, TransactionScope } from './types';
 import { categoryNameKey, mergeCategoryCatalog, normalizeCategoryData } from './categories';
+import { canonicalAccountIdentity } from './identity';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -177,40 +178,117 @@ export function sanitizeFinanceData(data: FinanceData, startMonth = data.reporti
     planItems: structuredClone(data.planItems), imports: structuredClone(imports), settings: { ...data.settings },
     ...(data.reporting ? { reporting: { ...data.reporting } } : {}),
     ...(data.work ? { work: structuredClone(data.work) } : {}), updatedAt: data.updatedAt,
+    ...(data.planning ? { planning: { ...data.planning } } : {}),
   };
 }
 
-/** Within the active interval, an explicit monthly amount overrides the recurring amount. */
+function safeCents(value: number): number {
+  if (!Number.isSafeInteger(value)) throw new Error('The projection exceeds the supported monetary range.');
+  return value;
+}
+
+/** Explicit overrides, including zero, take precedence inside the item's active interval. */
 export function planAmountForMonth(item: PlanItem, month: string): number {
+  if (!isValidMonth(month)) throw new Error('Invalid month.');
   if (item.deletedAt) return 0;
   if (month < item.startMonth || (item.endMonth && month > item.endMonth)) return 0;
-  if (Object.hasOwn(item.amounts, month)) return item.amounts[month];
-  return item.defaultAmountCents;
+  if (Object.hasOwn(item.amounts, month)) return safeCents(item.amounts[month]);
+  if (item.behavior === 'monthly') return 0;
+  if (item.behavior === 'installments') {
+    return (item.installments ?? []).reduce((total, schedule) => {
+      const lastMonth = addMonths(schedule.firstMonth, schedule.count - 1);
+      return month >= schedule.firstMonth && month <= lastMonth ? safeCents(total + schedule.amountCents) : total;
+    }, 0);
+  }
+  return safeCents(item.defaultAmountCents);
+}
+
+function indicator(targetCents: number | null, openingCents: number): PlanningIndicator {
+  // A valid return assumption can produce an unrepresentably large target.
+  if (targetCents !== null && !Number.isSafeInteger(targetCents)) targetCents = null;
+  const progressPercent = targetCents !== null && targetCents > 0 ? openingCents / targetCents * 100 : null;
+  if (progressPercent !== null && !Number.isFinite(progressPercent)) throw new Error('The projection exceeds the supported indicator range.');
+  return { targetCents, progressPercent };
 }
 
 export function projectReserve(data: FinanceData): ProjectionMonth[] {
   const { reserveStartMonth, horizonMonths, monthlyReturnPercent, initialReserveCents } = data.settings;
-  if (!isValidMonth(reserveStartMonth) || !Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 600 || !Number.isFinite(monthlyReturnPercent)) throw new Error('Invalid projection settings.');
+  if (!isValidMonth(reserveStartMonth) || !Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 600 || !Number.isFinite(monthlyReturnPercent) || !Number.isSafeInteger(initialReserveCents)) throw new Error('Invalid projection settings.');
+  const { age, pmrMonths = 12, annualNetReturnPercent } = data.planning ?? {};
+  if (age !== undefined && (!Number.isInteger(age) || age < 1 || age > 120)) throw new Error('Invalid planning age.');
+  if (pmrMonths !== 12 && pmrMonths !== 20) throw new Error('Invalid minimum reserve target.');
+  if (annualNetReturnPercent !== undefined && (!Number.isFinite(annualNetReturnPercent) || annualNetReturnPercent < 0 || annualNetReturnPercent > 100)) throw new Error('Invalid annual net return.');
   const rows: ProjectionMonth[] = [];
   let openingCents = initialReserveCents;
   for (let index = 0; index < horizonMonths; index++) {
     const month = addMonths(reserveStartMonth, index);
     let incomeCents = 0;
     let expenseCents = 0;
+    let contributionCents = 0;
     for (const item of data.planItems) {
       const amount = planAmountForMonth(item, month);
-      if (item.kind === 'income') incomeCents += amount;
-      else if (item.kind === 'expense') expenseCents += amount;
+      if (item.kind === 'income') incomeCents = safeCents(incomeCents + amount);
+      else if (item.kind === 'expense') expenseCents = safeCents(expenseCents + amount);
+      else if (item.kind === 'contribution') contributionCents = safeCents(contributionCents + amount);
     }
     // Returns apply only to the opening balance; the monthly surplus enters the closing balance.
     const returnCents = roundCents(openingCents * monthlyReturnPercent / 100);
-    const netCents = incomeCents - expenseCents;
-    const closingCents = openingCents + netCents + returnCents;
-    if (![incomeCents, expenseCents, returnCents, closingCents].every(Number.isSafeInteger)) throw new Error('The projection exceeds the supported monetary range.');
-    rows.push({ month, openingCents, incomeCents, expenseCents, returnCents, netCents, closingCents });
+    const netCents = safeCents(incomeCents - expenseCents);
+    const availableCents = safeCents(netCents - contributionCents);
+    const closingCents = safeCents(safeCents(openingCents + netCents) + safeCents(returnCents));
+    // Cerbasi's targets use monthly spending and accumulated assets: https://www.gustavocerbasi.com.br/livros/4/como-organizar-sua-vida-financeira
+    const indicators = {
+      pms: indicator(expenseCents * 6, openingCents),
+      pmr: indicator(expenseCents * pmrMonths, openingCents),
+      pi: indicator(age === undefined ? null : Math.round(expenseCents * 12 * (age + Math.floor(index / 12)) / 10), openingCents),
+      pnif: indicator(annualNetReturnPercent === undefined || annualNetReturnPercent === 0 ? null : Math.round(expenseCents * 12 / (annualNetReturnPercent / 100)), openingCents),
+    };
+    rows.push({ month, openingCents, incomeCents, expenseCents, contributionCents, availableCents, returnCents, netCents, closingCents, indicators });
     openingCents = closingCents;
   }
   return rows;
+}
+
+function installmentHash(value: string): string {
+  let hash = 14695981039346656037n;
+  for (const char of value) {
+    hash ^= BigInt(char.codePointAt(0)!);
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+/** Suggestions require review: another budget row may already cover the purchase. */
+export function getInstallmentSuggestions(data: FinanceData, month: string): InstallmentSchedule[] {
+  if (!isValidMonth(month)) throw new Error('Invalid month.');
+  const planned = new Set(data.planItems.filter(item => !item.deletedAt && item.behavior === 'installments')
+    .flatMap(item => (item.installments ?? []).flatMap(schedule => schedule.sourceKey ? [schedule.sourceKey] : [])));
+  const groups = new Map<string, { transaction: Transaction; count: number }[]>();
+  for (const transaction of data.transactions) {
+    if (transaction.month !== month || transaction.source !== 'card' || transaction.kind !== 'expense' || transaction.amountCents >= 0 || !isReportableTransaction(data, transaction)) continue;
+    const match = transaction.installment?.trim().match(/^(\d{1,3})\s*\/\s*(\d{1,3})$/);
+    if (!match) continue;
+    const current = Number(match[1]);
+    const total = Number(match[2]);
+    if (current < 1 || current > total || total > 600) continue;
+    let firstMonth: string;
+    try { firstMonth = addMonths(month, 1 - current); addMonths(firstMonth, total - 1); } catch { continue; }
+    const description = transaction.originalDescription.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ');
+    const key = JSON.stringify([canonicalAccountIdentity(transaction.account), transaction.date, description, transaction.amountCents, firstMonth, total]);
+    const group = groups.get(key) ?? [];
+    group.push({ transaction, count: total - current + 1 });
+    groups.set(key, group);
+  }
+  const suggestions: InstallmentSchedule[] = [];
+  for (const [key, group] of [...groups.entries()].sort(([left], [right]) => lexicalCompare(left, right))) {
+    group.sort((left, right) => (left.transaction.sourceRow ?? Infinity) - (right.transaction.sourceRow ?? Infinity) || lexicalCompare(left.transaction.fingerprint, right.transaction.fingerprint) || lexicalCompare(left.transaction.id, right.transaction.id));
+    group.forEach(({ transaction, count }, occurrence) => {
+      const sourceKey = `card-installment-${installmentHash(`${key}:${occurrence}`)}`;
+      if (transaction.deletedAt || getTransactionScope(data, transaction) === 'work' || planned.has(sourceKey)) return;
+      suggestions.push({ id: `schedule-${sourceKey}`, name: transaction.description.trim() || transaction.originalDescription.trim() || 'Card installment', amountCents: -transaction.amountCents, firstMonth: month, count, sourceKey });
+    });
+  }
+  return suggestions;
 }
 
 function roundCents(value: number): number {
@@ -307,7 +385,25 @@ function mergePlanItems(local: PlanItem[], remote: PlanItem[]): PlanItem[] {
     const sourcePlanId = sources.get(item.id);
     return sourcePlanId !== undefined && item.sourcePlanId !== sourcePlanId ? { ...item, sourcePlanId } : item;
   });
-  return reconcilePlanSegments(merged);
+  return reconcileInstallmentSources(reconcilePlanSegments(merged));
+}
+
+/** Concurrent selections of one statement purchase have one deterministic owning row. */
+export function reconcileInstallmentSources(items: PlanItem[]): PlanItem[] {
+  const owners = new Map<string, PlanItem>();
+  for (const item of items) {
+    if (item.deletedAt || item.behavior !== 'installments') continue;
+    for (const schedule of item.installments ?? []) {
+      if (!schedule.sourceKey) continue;
+      const owner = owners.get(schedule.sourceKey);
+      if (!owner || compareRecords(item, owner) > 0) owners.set(schedule.sourceKey, item);
+    }
+  }
+  return items.map(item => {
+    if (item.deletedAt || item.behavior !== 'installments' || !item.installments) return item;
+    const installments = item.installments.filter(schedule => !schedule.sourceKey || owners.get(schedule.sourceKey)?.id === item.id);
+    return installments.length === item.installments.length ? item : { ...item, installments };
+  });
 }
 
 export function mergeFinanceData(local: FinanceData, remote: FinanceData): FinanceData {
@@ -320,15 +416,17 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
   const epochData = sameEpoch ? undefined : local.reporting?.resetId === reporting?.resetId ? local : remote;
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
-  const pristineLocal = local.reporting === undefined && local.work === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
+  const pristineLocal = local.reporting === undefined && local.work === undefined && local.planning === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
-  const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
+  const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.planning !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = epochData?.settings ?? (pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings);
   const work = local.work === undefined ? remote.work : remote.work === undefined ? local.work :
     compareRecords(local.work, remote.work) >= 0 ? local.work : remote.work;
+  const planning = epochData ? epochData.planning : local.planning === undefined ? remote.planning : remote.planning === undefined ? local.planning :
+    compareRecords(local.planning, remote.planning) >= 0 ? local.planning : remote.planning;
   const merged: FinanceData = {
     version: 1,
     categories: mergeCategoryCatalog(local.categories, remote.categories),
@@ -338,6 +436,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     settings: { ...settings, googleClientId: local.settings.googleClientId },
     ...(reporting !== undefined ? { reporting: structuredClone(reporting) } : {}),
     ...(work !== undefined ? { work: structuredClone(work) } : {}),
+    ...(planning !== undefined ? { planning: { ...planning } } : {}),
     updatedAt: Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local.updatedAt : remote.updatedAt,
   };
   return normalizeCategoryData(sanitizeFinanceData(merged), false);

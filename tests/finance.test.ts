@@ -79,10 +79,10 @@ describe('reserve planning', () => {
       planItem('contribution', 'contribution', 50_000),
       planItem('deleted', 'expense', 99_000, { deletedAt: NOW.toISOString() }),
     ];
-    expect(projectReserve(data)).toEqual([
-      { month: '2026-12', openingCents: 100_005, incomeCents: 10_000, expenseCents: 3_000, returnCents: 500, netCents: 7_000, closingCents: 107_505 },
-      { month: '2027-01', openingCents: 107_505, incomeCents: 10_000, expenseCents: 0, returnCents: 538, netCents: 10_000, closingCents: 118_043 },
-      { month: '2027-02', openingCents: 118_043, incomeCents: 10_000, expenseCents: 2_000, returnCents: 590, netCents: 8_000, closingCents: 126_633 },
+    expect(projectReserve(data).map(({ indicators: _indicators, ...row }) => row)).toEqual([
+      { month: '2026-12', openingCents: 100_005, incomeCents: 10_000, expenseCents: 3_000, contributionCents: 50_000, availableCents: -43_000, returnCents: 500, netCents: 7_000, closingCents: 107_505 },
+      { month: '2027-01', openingCents: 107_505, incomeCents: 10_000, expenseCents: 0, contributionCents: 50_000, availableCents: -40_000, returnCents: 538, netCents: 10_000, closingCents: 118_043 },
+      { month: '2027-02', openingCents: 118_043, incomeCents: 10_000, expenseCents: 2_000, contributionCents: 50_000, availableCents: -42_000, returnCents: 590, netCents: 8_000, closingCents: 126_633 },
     ]);
   });
 

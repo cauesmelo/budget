@@ -1,8 +1,8 @@
 import { createStore, get, set } from 'idb-keyval';
-import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments, sanitizeFinanceData } from './finance';
+import { addMonths, isValidDate, isValidMonth, projectReserve, reconcilePlanSegments, sanitizeFinanceData } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
-import type { Category, FinanceData, ImportBatch, PlanItem, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
+import type { Category, FinanceData, ImportBatch, InstallmentSchedule, PlanItem, PlanningConfiguration, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 // The original Portuguese store name is required to read existing local data.
@@ -136,14 +136,55 @@ function planItem(value: unknown, path: string): PlanItem {
   const startMonth = month(source.startMonth, `${path}.startMonth`);
   const endMonth = source.endMonth === undefined ? undefined : month(source.endMonth, `${path}.endMonth`);
   if (endMonth && endMonth < startMonth) fail(path, 'has an end month before its start month');
+  const kind = oneOf<PlanItem['kind']>(source.kind, ['income', 'expense', 'contribution'], `${path}.kind`);
+  const behavior = source.behavior === undefined ? undefined : oneOf<NonNullable<PlanItem['behavior']>>(source.behavior, ['fixed', 'monthly', 'installments'], `${path}.behavior`);
+  if (behavior === 'installments' && kind !== 'expense') fail(`${path}.behavior`, 'supports expenses only');
+  const installments = source.installments === undefined ? undefined : array(source.installments, `${path}.installments`, installmentSchedule, 1_000);
+  const sourceKeys = new Set<string>();
+  for (const schedule of installments ?? []) {
+    if (!schedule.sourceKey) continue;
+    if (sourceKeys.has(schedule.sourceKey)) fail(`${path}.installments`, 'contains duplicate source identities');
+    sourceKeys.add(schedule.sourceKey);
+  }
   return {
     ...recordBase(source, path), name: string(source.name, `${path}.name`, true, 2_000),
     ...(source.sourcePlanId !== undefined ? { sourcePlanId: string(source.sourcePlanId, `${path}.sourcePlanId`, false, 1_000) } : {}),
     category: string(source.category, `${path}.category`, true, 500),
-    kind: oneOf<PlanItem['kind']>(source.kind, ['income', 'expense', 'contribution'], `${path}.kind`),
+    kind,
+    ...(behavior !== undefined ? { behavior } : {}),
+    ...(installments !== undefined ? { installments } : {}),
     defaultAmountCents: integer(source.defaultAmountCents, `${path}.defaultAmountCents`, 0),
     amounts: moneyMap(source.amounts, `${path}.amounts`, true, true),
     startMonth, ...(endMonth !== undefined ? { endMonth } : {}),
+  };
+}
+
+function installmentSchedule(value: unknown, path: string): InstallmentSchedule {
+  const source = object(value, path);
+  const firstMonth = month(source.firstMonth, `${path}.firstMonth`);
+  const count = integer(source.count, `${path}.count`, 1, 600);
+  try { addMonths(firstMonth, count - 1); } catch { fail(path, 'has payments outside the supported date range'); }
+  return {
+    id: string(source.id, `${path}.id`, false, 1_000),
+    name: string(source.name, `${path}.name`, true, 2_000),
+    amountCents: integer(source.amountCents, `${path}.amountCents`, 1),
+    firstMonth,
+    count,
+    ...(source.sourceKey !== undefined ? { sourceKey: string(source.sourceKey, `${path}.sourceKey`, false, 4_000) } : {}),
+  };
+}
+
+function planning(value: unknown): PlanningConfiguration {
+  const source = object(value, 'planning');
+  const pmrMonths = integer(source.pmrMonths, 'planning.pmrMonths', 12, 20);
+  if (pmrMonths !== 12 && pmrMonths !== 20) fail('planning.pmrMonths', 'must be 12 or 20 months');
+  const annualNetReturnPercent = source.annualNetReturnPercent;
+  if (annualNetReturnPercent !== undefined && (typeof annualNetReturnPercent !== 'number' || !Number.isFinite(annualNetReturnPercent) || annualNetReturnPercent < 0 || annualNetReturnPercent > 100)) fail('planning.annualNetReturnPercent', 'must be a finite rate between 0 and 100');
+  return {
+    pmrMonths,
+    ...(source.age !== undefined ? { age: integer(source.age, 'planning.age', 1, 120) } : {}),
+    ...(annualNetReturnPercent !== undefined ? { annualNetReturnPercent: annualNetReturnPercent as number } : {}),
+    updatedAt: timestamp(source.updatedAt, 'planning.updatedAt'),
   };
 }
 
@@ -267,10 +308,24 @@ export function validateBackup(payload: unknown): FinanceData {
     settings: settings(source.settings),
     ...(source.reporting !== undefined ? { reporting: reporting(source.reporting) } : {}),
     ...(source.work !== undefined ? { work: work(source.work) } : {}),
+    ...(source.planning !== undefined ? { planning: planning(source.planning) } : {}),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
+  const installmentOwners = new Map<string, string>();
+  parsed.planItems.forEach((item, itemIndex) => {
+    if (item.deletedAt || item.behavior !== 'installments') return;
+    item.installments?.forEach((schedule, scheduleIndex) => {
+      if (!schedule.sourceKey) return;
+      if (installmentOwners.has(schedule.sourceKey)) fail(`planItems[${itemIndex}].installments[${scheduleIndex}].sourceKey`, 'is already planned in another active installment row');
+      installmentOwners.set(schedule.sourceKey, item.id);
+    });
+  });
   try { parsed.planItems = reconcilePlanSegments(parsed.planItems); }
   catch (error) { fail('planItems', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid segment'); }
-  try { return normalizeCategoryData(sanitizeFinanceData(parsed), source.categories === undefined); }
+  let normalized: FinanceData;
+  try { normalized = normalizeCategoryData(sanitizeFinanceData(parsed), source.categories === undefined); }
   catch (error) { fail('categories', error instanceof Error ? error.message.replace(/\.$/, '') : 'contains an invalid category'); }
+  try { projectReserve(normalized); }
+  catch (error) { fail('projection', error instanceof Error ? error.message.replace(/\.$/, '') : 'exceeds the supported range'); }
+  return normalized;
 }

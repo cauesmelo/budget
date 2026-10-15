@@ -34,6 +34,33 @@ Categories already present in your data are added to the catalog automatically. 
 
 Planning items use names, types, dates, and monthly amounts. The planning table displays items that overlap the projection horizon, including items with explicit zero amounts.
 
+## Medium-term planning
+
+Create one row for each planned income, expense, or reserve allocation. Choose its behavior:
+
+- **Fixed** repeats the default amount throughout the active date range.
+- **By month** uses only the amounts entered for individual months; unset months are zero.
+- **Installments** adds the active purchase schedules and stops each one after its final payment. Use **Manage installments** to enter the payment, first billing month, and remaining payment count, including the first month.
+
+Any monthly amount can override the calculated value, including with zero. Remove the override to restore the calculation. Existing plan rows keep their fixed behavior. Start/end dates constrain every behavior.
+
+For an additional card commitment row, include only existing installments that other budget rows do not already cover. The installment editor can suggest personal purchases from a selected imported billing month. Review and select them explicitly; work expenses, transfers, refunds, and already scheduled suggestions are excluded. Suggestions include the selected bill's payment. Matching uses the original purchase details across successive statements; changed statement details and manually entered schedules still require your review. Nothing creates future actual transactions or changes the forecast without your selection.
+
+**Reserve** means money saved at the **beginning** of the month. The selected month's cards show income, spending, surplus, opening reserve, and closing reserve. A reserve target is an internal allocation: it reduces the amount available after the target, but does not subtract savings from total assets again. The table and charts distinguish opening and closing balances.
+
+The indicators follow [Gustavo Cerbasi's framework](https://www.gustavocerbasi.com.br/livros/4/como-organizar-sua-vida-financeira). This app uses each month's planned spending as the cost-of-living estimate:
+
+| Indicator | Asset target |
+| --- | --- |
+| PMS | 6 × monthly spending |
+| PMR | 12 or 20 × monthly spending |
+| PI | 0.1 × annual spending × age |
+| PNIF | Annual spending ÷ net annual return as a decimal |
+
+Progress is opening reserve divided by the target. These targets overlap and are not added together. Zero spending leaves progress uncalculated. Enter your age in the first planning month and your net annual return to enable PI and PNIF; neither input is assumed. Age advances once per planning year. PMR defaults to 12 months, with a 20-month option. The annual return sets PNIF's target; the separate expected monthly return projects reserve growth.
+
+Schedules and indicator assumptions are saved locally, in backups, and with Drive sync. A schedule belongs to its budget row; concurrent edits follow the same whole-record timestamp rule as other plan edits. A fresh start discards previous planning assumptions along with the previous plan.
+
 ## Reporting period and a fresh start
 
 Monthly reports use account, card, and manual transactions. Income is recorded from actual credits; the app has no fixed historical salary assumptions or spreadsheet-history reporting mode. Budget workbooks are no longer an import format.
@@ -67,7 +94,7 @@ The implemented option is **Google Drive**, using the application's own folder a
 
 Drive setup requires an OAuth client ID created in your Google account. It does not require a banking password, client secret, or server. Authorization requests only `drive.appdata`. The token stays in memory, and you may need to reconnect when it expires. Follow the [setup and comparison guide](docs/CLOUD.md), with official sources and limits researched in October 2026.
 
-On another computer, use the same OAuth client ID and **synchronize before starting**. Synchronization is triggered by the button and should be repeated after making changes. It merges the latest copies from your computers and saves a new copy to Drive, keeping previous copies. If the same record is edited on two computers, the edit with the latest timestamp wins. Keep the computers' clocks accurate. Deletions are also synchronized. Concurrent changes to fields of the same record are not merged individually.
+On another computer, use the same OAuth client ID and **synchronize before starting**. Synchronization is triggered by the button and should be repeated after making changes. It merges the latest copies from your computers and saves a new copy to Drive, keeping previous copies. If the same record is edited on two computers, the edit with the latest timestamp wins. Keep the computers' clocks accurate. Deletions are also synchronized. Concurrent changes to fields of the same record are not merged individually. If two devices select the same imported installment into different rows, the latest row keeps that purchase; the other row retains its unrelated schedules and monthly overrides.
 
 ## Personal data and GitHub
 
@@ -86,7 +113,7 @@ npm test
 npm run build
 ```
 
-Tests cover calculations in cents, refunds, contributions, projections, duplicates, migration, deletions, backup validation, and synchronization with mocked Google calls.
+Tests cover calculations in cents, refunds, contributions, fixed/monthly/installment projections, Cerbasi indicators, duplicate commitments, migration, deletions, backup validation, and synchronization with mocked Google calls.
 
 Optional tests are available for bank and card statement files. They read the files directly without copying them into the project:
 

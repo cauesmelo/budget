@@ -27,12 +27,28 @@ export interface PlanItem {
   name: string;
   category: string;
   kind: 'income' | 'expense' | 'contribution';
+  behavior?: 'fixed' | 'monthly' | 'installments';
+  installments?: InstallmentSchedule[];
   defaultAmountCents: number;
   amounts: Record<string, number>;
   startMonth: string;
   endMonth?: string;
   updatedAt: string;
   deletedAt?: string;
+}
+export interface InstallmentSchedule {
+  id: string;
+  name: string;
+  amountCents: number;
+  firstMonth: string;
+  count: number;
+  sourceKey?: string;
+}
+export interface PlanningConfiguration {
+  age?: number;
+  pmrMonths: 12 | 20;
+  annualNetReturnPercent?: number;
+  updatedAt: string;
 }
 export interface ImportBatch {
   id: string;
@@ -77,6 +93,7 @@ export interface FinanceData {
   settings: Settings;
   reporting?: ReportingConfiguration;
   work?: WorkConfiguration;
+  planning?: PlanningConfiguration;
   updatedAt: string;
 }
 export interface ImportResult {
@@ -87,4 +104,16 @@ export interface ImportResult {
 }
 export interface ImportOptions { cardMonth?: string }
 export interface MonthSummary { month: string; incomeCents: number; expenseCents: number; netCents: number; categories: Record<string, number>; count: number; workInCents: number; workOutCents: number; workNetCents: number }
-export interface ProjectionMonth { month: string; openingCents: number; incomeCents: number; expenseCents: number; returnCents: number; netCents: number; closingCents: number }
+export interface PlanningIndicator { targetCents: number | null; progressPercent: number | null }
+export interface ProjectionMonth {
+  month: string;
+  openingCents: number;
+  incomeCents: number;
+  expenseCents: number;
+  contributionCents: number;
+  availableCents: number;
+  returnCents: number;
+  netCents: number;
+  closingCents: number;
+  indicators: Record<'pms' | 'pmr' | 'pi' | 'pnif', PlanningIndicator>;
+}
