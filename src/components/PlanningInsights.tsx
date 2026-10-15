@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Check, CircleHelp, PiggyBank, TrendingUp, Wallet } from 'lucide-react';
 import { formatMoney, formatMonth } from '../lib/finance';
 import type { FinanceData, PlanningConfiguration, PlanningIndicator, ProjectionMonth } from '../lib/types';
@@ -17,7 +17,7 @@ const formatPercent = (value: number) => `${value.toLocaleString('en-GB', { maxi
 function unavailableReason(key: IndicatorKey, row: ProjectionMonth, planning?: PlanningConfiguration) {
   if (row.expenseCents <= 0) return 'Add planned spending to calculate this target.';
   if (key === 'pi' && planning?.age === undefined) return 'Set your age to calculate this target.';
-  if (key === 'pnif' && !(planning?.annualNetReturnPercent && planning.annualNetReturnPercent > 0)) return 'Set a positive net annual return to calculate this target.';
+  if (key === 'pnif' && !(planning?.annualNetReturnPercent && planning.annualNetReturnPercent > 0)) return 'Optional: enter an annual investment return after inflation, taxes, and fees to calculate PNIF.';
   return 'This target exceeds the supported currency range. Review your assumptions.';
 }
 
@@ -28,6 +28,7 @@ function IndicatorProgress({ indicator, label }: { indicator: PlanningIndicator;
 }
 
 export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onChange: (planning: PlanningConfiguration) => boolean }) {
+  const annualReturnHelpId = useId();
   const savedAge = data.planning?.age;
   const savedPmr = data.planning?.pmrMonths ?? 12;
   const savedAnnualReturn = data.planning?.annualNetReturnPercent;
@@ -50,7 +51,7 @@ export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onC
     const parsedAge = age.trim() ? Number(age) : undefined;
     const parsedReturn = annualReturn.trim() ? Number(annualReturn) : undefined;
     if (parsedAge !== undefined && (!Number.isInteger(parsedAge) || parsedAge < 1 || parsedAge > 120)) { setError('Age must be a whole number between 1 and 120, or left blank.'); return; }
-    if (parsedReturn !== undefined && (!Number.isFinite(parsedReturn) || parsedReturn < 0 || parsedReturn > 100)) { setError('Net annual return must be between 0% and 100%, or left blank.'); return; }
+    if (parsedReturn !== undefined && (!Number.isFinite(parsedReturn) || parsedReturn < 0 || parsedReturn > 100)) { setError('Annual investment return must be between 0% and 100%, or left blank.'); return; }
     try {
       if (!onChange({ age: parsedAge, pmrMonths, annualNetReturnPercent: parsedReturn, updatedAt: new Date().toISOString() })) { setError('Could not save the planning assumptions. Check your data and try again.'); return; }
       setStatus('Planning assumptions saved.');
@@ -62,12 +63,15 @@ export function PlanningAssumptions({ data, onChange }: { data: FinanceData; onC
     <form className="planning-assumptions-form" onSubmit={save}>
       <label className="field"><span>Age in first planning month</span><input type="number" inputMode="numeric" min="1" max="120" step="1" placeholder="Optional" value={age} onChange={event => { changed(); setAge(event.target.value); }} /><small>Age in {formatMonth(data.settings.reserveStartMonth)}; increases yearly.</small></label>
       <label className="field"><span>PMR coverage</span><select value={pmrMonths} onChange={event => { changed(); setPmrMonths(Number(event.target.value) as 12 | 20); }}><option value="12">12 months of spending</option><option value="20">20 months of spending</option></select><small>Choose the reserve coverage for your situation.</small></label>
-      <label className="field"><span>Net annual return for PNIF (%)</span><input type="number" inputMode="decimal" min="0" max="100" step="any" placeholder="Optional" value={annualReturn} onChange={event => { changed(); setAnnualReturn(event.target.value); }} /><small>Expected net annual return after costs and taxes.</small></label>
+      <div>
+        <label className="field"><span>Annual investment return for PNIF (%)</span><input aria-label="Annual investment return for PNIF (%)" aria-describedby={annualReturnHelpId} type="number" inputMode="decimal" min="0" max="100" step="any" placeholder="Leave blank if unsure" value={annualReturn} onChange={event => { changed(); setAnnualReturn(event.target.value); }} /><small id={annualReturnHelpId}>Expected yearly return after inflation, taxes, and fees. Leave blank if unsure; your budget and reserve forecast still work.</small></label>
+        <details className="planning-formulas"><summary>See an example</summary><p>Example only: at 4% a year after inflation, taxes, and fees, R$100,000 would earn R$4,000 a year in today’s buying power. Enter 4 for 4%, not 0.04.</p><p>A higher assumed return lowers the PNIF target. Use a long-term estimate for your own investments.</p></details>
+      </div>
       <button type="submit" className="button">Save assumptions</button>
     </form>
     {error && <div className="alert error" role="alert">{error}</div>}
     {status && <div className="alert success" role="status"><Check size={16} aria-hidden="true" />{status}</div>}
-    <p className="planning-assumptions-help">Age and net annual return are optional. PI and PNIF appear when their required inputs are available. The annual return here sets the PNIF target; reserve growth uses the separate monthly forecast return.</p>
+    <p className="planning-assumptions-help">Age and annual investment return are optional. PI needs your age; PNIF needs a positive annual return. The annual return here only sets the financial independence target; reserve growth uses the separate monthly forecast return in Plan settings.</p>
     <p className="planning-source">Indicator framework: <a href="https://www.gustavocerbasi.com.br/livros/4/como-organizar-sua-vida-financeira" target="_blank" rel="noopener noreferrer">Gustavo Cerbasi · How to Organize Your Financial Life</a>.</p>
   </section>;
 }

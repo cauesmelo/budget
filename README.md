@@ -73,6 +73,8 @@ The indicators follow [Gustavo Cerbasi's framework](https://www.gustavocerbasi.c
 
 Progress is opening reserve divided by the target. These targets overlap and are not added together. Zero spending leaves progress uncalculated. Enter your age in the first planning month and your net annual return to enable PI and PNIF; neither input is assumed. Age advances once per planning year. PMR defaults to 12 months, with a 20-month option. The annual return sets PNIF's target; the separate expected monthly return projects reserve growth.
 
+For PNIF, Cerbasi defines the annual return after inflation, taxes, and investment costs. Supply that already-adjusted percentage; the app does not subtract these costs again or infer a rate from your statements. If unsure, leave it blank: PNIF stays uncalculated while budgeting, reserve forecasts, and other available indicators continue to work. The optional example is illustrative, not a suggested rate. Existing saved percentages are preserved without conversion.
+
 Budget amounts and indicator assumptions are saved locally, in backups, and with Drive sync. A schedule belongs to its budget row; concurrent edits follow the same whole-record timestamp rule as other plan edits. A fresh start discards previous planning assumptions along with the previous plan.
 
 ## Reporting period and a fresh start

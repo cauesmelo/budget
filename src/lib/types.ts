@@ -47,6 +47,7 @@ export interface InstallmentSchedule {
 export interface PlanningConfiguration {
   age?: number;
   pmrMonths: 12 | 20;
+  /** Annual investment return after inflation, taxes, and fees, expressed as a percentage. */
   annualNetReturnPercent?: number;
   updatedAt: string;
 }
