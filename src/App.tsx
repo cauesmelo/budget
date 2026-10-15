@@ -453,17 +453,6 @@ export default function App() {
       </>}
 
       {page === 'plan' && <>
-        <section className="panel simple-plan-basics">
-          <div className="simple-plan-inputs">
-            <label className="field"><span>Starting reserve (R$)</span><MoneyInput label="Starting reserve" value={data.settings.initialReserveCents} onChange={amount => patchSettings({ initialReserveCents: amount })} /></label>
-            {incomeRows.map(item => <label className="field" key={item.id}><span>{incomeRows.length === 1 ? 'Monthly income (R$)' : `${item.name} per month (R$)`}</span><MoneyInput label={incomeRows.length === 1 ? 'Monthly income' : `Monthly income for ${item.name}`} value={item.behavior === 'monthly' || item.behavior === 'installments' ? 0 : item.defaultAmountCents} onChange={amount => editPlanMonthly(item.id, Math.max(0, amount))} /></label>)}
-          </div>
-          <details className="simple-plan-options"><summary>Forecast settings</summary><div className="settings-grid">
-            <label className="field"><span>First month</span><input aria-label="First planning month" type="month" min={startMonth} value={data.settings.reserveStartMonth} onChange={event => event.target.value && patchSettings({ reserveStartMonth: event.target.value })} /></label>
-            <label className="field"><span>Months to plan</span><input aria-label="Planning horizon" type="number" min="1" max="120" value={data.settings.horizonMonths} onChange={event => patchSettings({ horizonMonths: Math.min(120, Math.max(1, Number(event.target.value) || 1)) })} /></label>
-            <label className="field"><span>Monthly investment return (%)</span><input aria-label="Monthly investment return" type="number" min="-100" max="100" step="0.01" value={data.settings.monthlyReturnPercent} onChange={event => patchSettings({ monthlyReturnPercent: Math.min(100, Math.max(-100, Number(event.target.value))) })} /></label>
-          </div></details>
-        </section>
         <section className="panel plan-table-panel">
           <div className="panel-header"><div><h2>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
           <div className="plan-controls"><span>{formatMonth(visiblePlanningMonths[0].month)} – {formatMonth(visiblePlanningMonths.at(-1)!.month)}</span><div><button className="icon-button" disabled={visiblePlanOffset === 0} onClick={() => setPlanOffset(Math.max(0, visiblePlanOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={visiblePlanOffset + 6 >= projection.length} onClick={() => setPlanOffset(visiblePlanOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
@@ -483,6 +472,19 @@ export default function App() {
           <Metric label="Projected reserve" value={formatMoney(finalProjection?.closingCents ?? 0)} detail={`At the end of ${formatMonth(finalProjection!.month)}`} icon={<Wallet size={18} />} tint />
         </div>
         <section className="panel"><div className="panel-header"><div><h2>Reserve growth</h2><p>Your reserve at the start of each month, based on the budget above.</p></div></div><ReserveOutlook rows={projection} goalCents={data.settings.reserveGoalCents} onGoalChange={amount => patchSettings({ reserveGoalCents: amount })} /><div className="chart tall"><ResponsiveContainer width="100%" height="100%"><AreaChart data={projection} margin={{ top: 15, right: 15, left: 15, bottom: 5 }}><defs><linearGradient id="reserveGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--green)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--green)" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={value => formatMonth(value)} minTickGap={45} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} width={75} axisLine={false} tickLine={false} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={value => formatMoney(Number(value))} labelFormatter={value => formatMonth(String(value))} /><Area isAnimationActive={false} type="monotone" dataKey="openingCents" name="Opening reserve" stroke="var(--green)" strokeWidth={3} fill="url(#reserveGradient)" /></AreaChart></ResponsiveContainer></div></section>
+        <details className="panel simple-plan-extra simple-plan-settings"><summary>Plan settings <span className="plan-settings-hint">Starting reserve, monthly income, and forecast assumptions</span></summary>
+          <div className="simple-plan-settings-body">
+            <div className="simple-plan-inputs">
+              <label className="field"><span>Starting reserve (R$)</span><MoneyInput label="Starting reserve" value={data.settings.initialReserveCents} onChange={amount => patchSettings({ initialReserveCents: amount })} /><small>Balance at the start of your first planning month.</small></label>
+              {incomeRows.map(item => <label className="field" key={item.id}><span>{incomeRows.length === 1 ? 'Monthly income (R$)' : `${item.name} per month (R$)`}</span><MoneyInput label={incomeRows.length === 1 ? 'Monthly income' : `Monthly income for ${item.name}`} value={item.behavior === 'monthly' || item.behavior === 'installments' ? 0 : item.defaultAmountCents} onChange={amount => editPlanMonthly(item.id, Math.max(0, amount))} /></label>)}
+            </div>
+            <div className="settings-grid simple-plan-forecast-inputs">
+              <label className="field"><span>First month</span><input aria-label="First planning month" type="month" min={startMonth} value={data.settings.reserveStartMonth} onChange={event => event.target.value && patchSettings({ reserveStartMonth: event.target.value })} /></label>
+              <label className="field"><span>Months to plan</span><input aria-label="Planning horizon" type="number" min="1" max="120" value={data.settings.horizonMonths} onChange={event => patchSettings({ horizonMonths: Math.min(120, Math.max(1, Number(event.target.value) || 1)) })} /></label>
+              <label className="field"><span>Monthly investment return (%)</span><input aria-label="Monthly investment return" type="number" min="-100" max="100" step="0.01" value={data.settings.monthlyReturnPercent} onChange={event => patchSettings({ monthlyReturnPercent: Math.min(100, Math.max(-100, Number(event.target.value))) })} /></label>
+            </div>
+          </div>
+        </details>
         <details className="panel simple-plan-extra"><summary>Savings targets</summary><p className="simple-plan-extra-copy">Optional allocations within your savings. These are excluded from spending.</p><div className="simple-plan-extra-actions"><Button secondary onClick={() => addPlan('contribution')}><Plus size={16} /> Add savings target</Button></div>
           <PlanGrid items={targetPlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth}>
             <tr className="plan-total"><td colSpan={2}>Savings target</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.contributionCents)}</td>)}<td /></tr>

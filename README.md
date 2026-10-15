@@ -21,7 +21,7 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 
 1. Import your Itaú bank and card statements in `.xls` or `.xlsx` format. Card billing months are detected automatically. Review the reporting period, suggestions, and warnings before confirming; use **Set a card month manually** only when detection is missing or incorrect.
 2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type and scope when necessary.
-3. In **Medium-term plan**, enter your opening reserve, expected income, expenses, and planning horizon. Edit the monthly amounts and follow the charts.
+3. In **Medium-term plan**, open **Plan settings** below the reserve chart to enter your starting reserve, monthly income, and planning horizon. Add planned expenses, edit monthly amounts, and follow the charts.
 4. In **Data and cloud**, export a backup or configure the Google Drive connection.
 
 Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Entries matching recorded details with a different amount appear under **Review possible repeats**. Review them or use **Skip this entry**; possible repeats are never removed automatically, because they can also be legitimate separate purchases. A manual billing-month override applies to all card files selected together.
@@ -46,7 +46,7 @@ Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplu
 
 ## Medium-term planning
 
-Enter your **Starting reserve** and **Monthly income**, then add the expenses you expect. The **Monthly (R$)** column repeats the amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
+Your planned expenses come first. Open **Plan settings** below the reserve chart to set your **Starting reserve** and **Monthly income**; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
 
 For a changing card commitment, enter the expected amount directly in each month. Include only installments not already covered by other expense rows. No row type, behavior, or date setup is required. Importing a statement does not automatically change planned amounts or create future actual transactions.
 
@@ -56,7 +56,7 @@ Set an optional **Reserve goal** to see whether it is already met, when the fore
 
 Optional controls stay collapsed:
 
-- **Forecast settings** changes the first month, horizon, and monthly investment return.
+- **Plan settings** changes the starting reserve, monthly income, first month, horizon, and monthly investment return.
 - **Savings targets** keeps internal allocations separate from spending. They reduce the amount left after the allocation without subtracting savings from total assets again.
 - **Financial indicators** shows the Cerbasi targets and their assumptions.
 

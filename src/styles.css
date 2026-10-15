@@ -129,9 +129,9 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .simple-plan-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:20px}
 .simple-plan-inputs .field{margin:0}
 .simple-plan-inputs input{font-size:18px;font-variant-numeric:tabular-nums;padding:12px}
-.simple-plan-options{margin-top:20px;padding-top:15px;border-top:1px solid var(--border)}
-.simple-plan-options>summary{font-size:12px;color:var(--green);cursor:pointer;font-weight:500}
-.simple-plan-options>.settings-grid{margin-top:20px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.simple-plan-settings-body{margin-top:22px}
+.plan-settings-hint{font-size:12px;font-weight:400;color:var(--muted);margin-left:12px}
+.simple-plan-forecast-inputs{margin-top:20px;padding-top:20px;border-top:1px solid var(--border);grid-template-columns:repeat(3,minmax(0,1fr))}
 .simple-plan-table th,.simple-plan-table td{min-width:130px}
 .simple-plan-table th:first-child,.simple-plan-table td:first-child{min-width:220px}
 .simple-plan-table th:last-child,.simple-plan-table td:last-child{min-width:48px;width:48px;padding-inline:9px}
@@ -142,7 +142,7 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .simple-plan-extra-actions .button{font-size:11px}
 .simple-plan-indicators{margin-top:24px}
 .simple-plan-indicators>.planning-assumptions:last-child{margin-bottom:0}
-@media(max-width:640px){.simple-plan-inputs{grid-template-columns:1fr 1fr;gap:13px}.simple-plan-inputs .field>span{font-size:11px}.simple-plan-inputs input{font-size:16px;padding:10px;min-width:0}.simple-plan-options>.settings-grid{grid-template-columns:1fr;gap:16px}.simple-plan-options .field>span{min-height:0}.simple-plan-extra>summary{font-size:14px}.simple-plan-extra-actions{justify-content:flex-start}}
+@media(max-width:640px){.simple-plan-inputs{grid-template-columns:1fr 1fr;gap:13px}.simple-plan-inputs .field>span{font-size:11px}.simple-plan-inputs input{font-size:16px;padding:10px;min-width:0}.simple-plan-forecast-inputs{grid-template-columns:1fr;gap:16px}.simple-plan-forecast-inputs .field>span{min-height:0}.plan-settings-hint{display:block;margin:4px 0 0 14px;line-height:1.7}.simple-plan-extra>summary{font-size:14px}.simple-plan-extra-actions{justify-content:flex-start}}
 
 .local-save-status{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .header-sync{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--green);font-size:11px;white-space:nowrap}
