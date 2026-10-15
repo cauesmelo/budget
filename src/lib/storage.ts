@@ -2,7 +2,7 @@ import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth, projectReserve, reconcilePlanSegments, sanitizeFinanceData } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
-import type { Category, FinanceData, ImportBatch, InstallmentSchedule, PlanItem, PlanningConfiguration, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
+import type { Category, FinanceData, ImportBatch, InstallmentSchedule, PlanItem, PlanOrder, PlanningConfiguration, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 // The original Portuguese store name is required to read existing local data.
@@ -188,6 +188,19 @@ function planning(value: unknown): PlanningConfiguration {
   };
 }
 
+function planOrder(value: unknown): PlanOrder {
+  const source = object(value, 'planOrder');
+  if (!Array.isArray(source.ids) || source.ids.length > 10_000) fail('planOrder.ids', 'must be a list within the size limit');
+  const seen = new Set<string>();
+  const ids = source.ids.map((entry, index) => {
+    const id = string(entry, `planOrder.ids[${index}]`, false, 1_000);
+    if (seen.has(id)) fail(`planOrder.ids[${index}]`, 'is duplicated');
+    seen.add(id);
+    return id;
+  });
+  return { ids, updatedAt: timestamp(source.updatedAt, 'planOrder.updatedAt') };
+}
+
 function importBatch(value: unknown, path: string): ImportBatch {
   const source = object(value, path);
   return {
@@ -309,6 +322,7 @@ export function validateBackup(payload: unknown): FinanceData {
     ...(source.reporting !== undefined ? { reporting: reporting(source.reporting) } : {}),
     ...(source.work !== undefined ? { work: work(source.work) } : {}),
     ...(source.planning !== undefined ? { planning: planning(source.planning) } : {}),
+    ...(source.planOrder !== undefined ? { planOrder: planOrder(source.planOrder) } : {}),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
   const installmentOwners = new Map<string, string>();

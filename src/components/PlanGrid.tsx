@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
 import { formatMoney, formatMonth, planAmountForMonth } from '../lib/finance';
 import type { PlanItem, ProjectionMonth } from '../lib/types';
 import { MoneyInput } from './MoneyInput';
@@ -8,6 +8,7 @@ interface PlanGridCallbacks {
   onPatch: (id: string, patch: Partial<PlanItem>) => boolean;
   onMonthly: (id: string, amount: number) => boolean;
   onMonth: (id: string, month: string, amount: number) => boolean;
+  onMove?: (id: string, direction: 'up' | 'down') => boolean;
 }
 
 interface PlanGridProps extends PlanGridCallbacks {
@@ -22,17 +23,32 @@ interface PlanGridRowProps extends PlanGridCallbacks {
   editableName?: boolean;
   editableMonthly?: boolean;
   removable?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 export function PlanGridRow({
-  item, months, onPatch, onMonthly, onMonth,
+  item, months, onPatch, onMonthly, onMonth, onMove,
   editableName = true, editableMonthly = true, removable = true,
+  canMoveUp = false, canMoveDown = false,
 }: PlanGridRowProps) {
   const monthlyAmount = item.behavior === 'monthly' || item.behavior === 'installments' ? 0 : item.defaultAmountCents;
+  function move(direction: 'up' | 'down', button: HTMLButtonElement) {
+    const row = button.closest('tr');
+    if (!onMove?.(item.id, direction)) return;
+    requestAnimationFrame(() => {
+      if (!row?.isConnected) return;
+      const target = button.disabled ? row.querySelector<HTMLButtonElement>('.plan-item-order button:not(:disabled)') : button;
+      target?.focus({ preventScroll: true });
+    });
+  }
   return <tr data-plan-id={item.id}>
-    <td>{editableName
+    <td><div className={`plan-item-name${onMove ? ' reorderable' : ''}`}>{onMove && <div className="plan-item-order">
+      <button type="button" className="icon-button" title="Move up" aria-label={`Move ${item.name} up`} disabled={!canMoveUp} onClick={event => move('up', event.currentTarget)}><ChevronUp size={15} aria-hidden="true" /></button>
+      <button type="button" className="icon-button" title="Move down" aria-label={`Move ${item.name} down`} disabled={!canMoveDown} onClick={event => move('down', event.currentTarget)}><ChevronDown size={15} aria-hidden="true" /></button>
+    </div>}{editableName
       ? <input aria-label="Item name" value={item.name} onChange={event => onPatch(item.id, { name: event.target.value })} />
-      : <span className="simple-plan-label">{item.name}</span>}</td>
+      : <span className="simple-plan-label">{item.name}</span>}</div></td>
     <td>{editableMonthly
       ? <MoneyInput label={`Monthly amount for ${item.name}`} value={monthlyAmount} onChange={amount => onMonthly(item.id, Math.max(0, amount))} />
       : formatMoney(monthlyAmount)}</td>
@@ -53,12 +69,18 @@ export function PlanGridRow({
   </tr>;
 }
 
-export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, children }: PlanGridProps) {
-  return <><p className="table-swipe-hint">Swipe horizontally to see the months.</p><div className="table-scroll">
+export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, onMove, children }: PlanGridProps) {
+  const [moveStatus, setMoveStatus] = useState('');
+  function move(id: string, direction: 'up' | 'down') {
+    if (!onMove?.(id, direction)) return false;
+    setMoveStatus(`${items.find(item => item.id === id)?.name || 'Item'} moved ${direction}.`);
+    return true;
+  }
+  return <><span className="plan-reorder-status" role="status" aria-live="polite">{moveStatus}</span><p className="table-swipe-hint">Swipe horizontally to see the months.</p><div className="table-scroll">
     <table className="plan-table simple-plan-table">
       <thead><tr><th>Item</th><th>Monthly (R$)</th>{months.map(({ month }) => <th key={month}>{formatMonth(month)}</th>)}<th /></tr></thead>
       <tbody>
-        {items.map(item => <PlanGridRow key={item.id} item={item} months={months} onPatch={onPatch} onMonthly={onMonthly} onMonth={onMonth} />)}
+        {items.map((item, index) => <PlanGridRow key={item.id} item={item} months={months} onPatch={onPatch} onMonthly={onMonthly} onMonth={onMonth} onMove={onMove && items.length > 1 ? move : undefined} canMoveUp={index > 0} canMoveDown={index < items.length - 1} />)}
         {children}
       </tbody>
     </table>

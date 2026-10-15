@@ -48,6 +48,8 @@ Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplu
 
 Your planned expenses come first. Open **Plan settings** below the reserve chart to set your **Starting reserve** and **Monthly income**; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
 
+Use the up and down arrows beside an item name to reorder planned expenses or savings targets within their table. The order is saved locally, included in backups and Drive sync, and kept separate from financial edits. New items appear at the end; reordering does not change amounts or reserve calculations.
+
 For a changing card commitment, enter the expected amount directly in each month. Include only installments not already covered by other expense rows. No row type, behavior, or date setup is required. Importing a statement does not automatically change planned amounts or create future actual transactions.
 
 The main page shows planned spending, monthly savings, and the reserve projected at the end of the horizon. The chart shows the reserve at the **beginning** of each month; the closing balance becomes the next month’s opening reserve. Monthly savings are planned income minus spending.

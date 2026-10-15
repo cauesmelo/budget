@@ -51,6 +51,10 @@ export interface PlanningConfiguration {
   annualNetReturnPercent?: number;
   updatedAt: string;
 }
+export interface PlanOrder {
+  ids: string[];
+  updatedAt: string;
+}
 export interface ImportBatch {
   id: string;
   filename: string;
@@ -95,6 +99,7 @@ export interface FinanceData {
   reporting?: ReportingConfiguration;
   work?: WorkConfiguration;
   planning?: PlanningConfiguration;
+  planOrder?: PlanOrder;
   updatedAt: string;
 }
 export interface ImportResult {

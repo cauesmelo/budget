@@ -184,6 +184,7 @@ export function sanitizeFinanceData(data: FinanceData, startMonth = data.reporti
     ...(data.reporting ? { reporting: { ...data.reporting } } : {}),
     ...(data.work ? { work: structuredClone(data.work) } : {}), updatedAt: data.updatedAt,
     ...(data.planning ? { planning: { ...data.planning } } : {}),
+    ...(data.planOrder ? { planOrder: structuredClone(data.planOrder) } : {}),
   };
 }
 
@@ -421,10 +422,10 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
   const epochData = sameEpoch ? undefined : local.reporting?.resetId === reporting?.resetId ? local : remote;
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
-  const pristineLocal = local.reporting === undefined && local.work === undefined && local.planning === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
+  const pristineLocal = local.reporting === undefined && local.work === undefined && local.planning === undefined && local.planOrder === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
-  const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.planning !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
+  const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.planning !== undefined || remote.planOrder !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = epochData?.settings ?? (pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings);
@@ -432,6 +433,8 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     compareRecords(local.work, remote.work) >= 0 ? local.work : remote.work;
   const planning = epochData ? epochData.planning : local.planning === undefined ? remote.planning : remote.planning === undefined ? local.planning :
     compareRecords(local.planning, remote.planning) >= 0 ? local.planning : remote.planning;
+  const planOrder = epochData ? epochData.planOrder : local.planOrder === undefined ? remote.planOrder : remote.planOrder === undefined ? local.planOrder :
+    compareRecords(local.planOrder, remote.planOrder) >= 0 ? local.planOrder : remote.planOrder;
   const merged: FinanceData = {
     version: 1,
     categories: mergeCategoryCatalog(local.categories, remote.categories),
@@ -442,6 +445,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     ...(reporting !== undefined ? { reporting: structuredClone(reporting) } : {}),
     ...(work !== undefined ? { work: structuredClone(work) } : {}),
     ...(planning !== undefined ? { planning: { ...planning } } : {}),
+    ...(planOrder !== undefined ? { planOrder: structuredClone(planOrder) } : {}),
     updatedAt: Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local.updatedAt : remote.updatedAt,
   };
   return normalizeCategoryData(sanitizeFinanceData(merged), false);

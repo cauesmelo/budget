@@ -14,6 +14,7 @@ import { DecimalInput } from './components/DecimalInput';
 import { formatMoneyAmount, formatNumber } from './lib/numbers';
 import { PlanGrid, PlanGridRow } from './components/PlanGrid';
 import { setPlanMonthAmount, setPlanMonthlyAmount } from './lib/planning';
+import { appendPlanItem, getOrderedPlanItems, movePlanItem } from './lib/planOrder';
 import { PlanningAssumptions, PlanningMetrics, PlanningIndicatorsTable } from './components/PlanningInsights';
 import { BudgetComparisonCard, CategoryBreakdown } from './components/OverviewInsights';
 import { ReserveOutlook } from './components/ReserveOutlook';
@@ -294,6 +295,16 @@ export default function App() {
       return { ...current, planItems: current.planItems.map(row => row.id === id ? setPlanMonthlyAmount(item, amountCents, stamp) : row) };
     });
   }
+  function reorderPlan(id: string, direction: 'up' | 'down') {
+    const current = dataRef.current;
+    const item = current.planItems.find(row => row.id === id && !row.deletedAt);
+    if (!item || item.kind === 'income') return false;
+    const firstMonth = current.settings.reserveStartMonth;
+    const lastMonth = addMonths(firstMonth, current.settings.horizonMonths - 1);
+    const visibleIds = getOrderedPlanItems(current).filter(row => !row.deletedAt && row.kind === item.kind && row.startMonth <= lastMonth && (!row.endMonth || row.endMonth >= firstMonth)).map(row => row.id);
+    const next = movePlanItem(current, id, direction, visibleIds, new Date().toISOString());
+    return next === current ? false : change(() => next);
+  }
   function editPlanMonth(id: string, editedMonth: string, amountCents: number) {
     return change(current => {
       const stamp = new Date().toISOString();
@@ -326,7 +337,7 @@ export default function App() {
     const index = projection.findIndex(row => row.month === nextMonth);
     if (index >= 0) setPlanOffset(Math.floor(index / 6) * 6);
   }
-  const horizonPlanItems = data.planItems.filter(item => !item.deletedAt && item.startMonth <= projection.at(-1)!.month && (!item.endMonth || item.endMonth >= projection[0].month));
+  const horizonPlanItems = getOrderedPlanItems(data).filter(item => !item.deletedAt && item.startMonth <= projection.at(-1)!.month && (!item.endMonth || item.endMonth >= projection[0].month));
   const expensePlanItems = horizonPlanItems.filter(item => item.kind === 'expense');
   const incomePlanItems = horizonPlanItems.filter(item => item.kind === 'income');
   const targetPlanItems = horizonPlanItems.filter(item => item.kind === 'contribution');
@@ -417,7 +428,7 @@ export default function App() {
   function addPlan(kind: PlanItem['kind'] = 'expense') {
     const names = { expense: 'New expense', income: 'Planned income', contribution: 'Reserve target' };
     const now = new Date().toISOString(), id = crypto.randomUUID();
-    if (change(d => ({ ...d, planItems: [...d.planItems, { id, name: names[kind], category: '', kind, defaultAmountCents: 0, amounts: {}, startMonth: d.settings.reserveStartMonth, updatedAt: now }] }))) setFocusPlanId(id);
+    if (change(d => appendPlanItem(d, { id, name: names[kind], category: '', kind, defaultAmountCents: 0, amounts: {}, startMonth: d.settings.reserveStartMonth, updatedAt: now }, now))) setFocusPlanId(id);
   }
 
   if (!loaded) return <div className="loading-screen"><LoaderCircle className="spin" /> Loading your finances…{error && <p>{error}</p>}</div>;
@@ -463,7 +474,7 @@ export default function App() {
         <section className="panel plan-table-panel">
           <div className="panel-header"><div><h2>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
           <div className="plan-controls"><span>{formatMonth(visiblePlanningMonths[0].month)} – {formatMonth(visiblePlanningMonths.at(-1)!.month)}</span><div><button className="icon-button" disabled={visiblePlanOffset === 0} onClick={() => setPlanOffset(Math.max(0, visiblePlanOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={visiblePlanOffset + 6 >= projection.length} onClick={() => setPlanOffset(visiblePlanOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
-          <PlanGrid items={expensePlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth}>
+          <PlanGrid items={expensePlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} onMove={reorderPlan}>
             <tr className="plan-total"><td colSpan={2}>Planned spending</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.expenseCents)}</td>)}<td /></tr>
             {incomeRows.map(item => <PlanGridRow key={item.id} item={item} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} editableName={false} editableMonthly={false} removable={false} />)}
             {([
@@ -493,7 +504,7 @@ export default function App() {
           </div>
         </details>
         <details className="panel simple-plan-extra"><summary>Savings targets</summary><p className="simple-plan-extra-copy">Optional allocations within your savings. These are excluded from spending.</p><div className="simple-plan-extra-actions"><Button secondary onClick={() => addPlan('contribution')}><Plus size={16} /> Add savings target</Button></div>
-          <PlanGrid items={targetPlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth}>
+          <PlanGrid items={targetPlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} onMove={reorderPlan}>
             <tr className="plan-total"><td colSpan={2}>Savings target</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.contributionCents)}</td>)}<td /></tr>
             <tr className="plan-total"><td colSpan={2}>Left after savings target</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.availableCents)}</td>)}<td /></tr>
           </PlanGrid>
