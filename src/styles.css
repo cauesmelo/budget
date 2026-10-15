@@ -202,6 +202,20 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .reserve-outlook-warnings .alert{margin:0;display:block;font-size:12px;line-height:1.8}
 .reserve-outlook-warnings strong{font-weight:650}
 .reserve-outlook-assumption{font-size:11px!important;line-height:1.8!important;margin:15px 0 0!important}
+.reserve-growth-panel .panel-header{margin-bottom:18px}
+.reserve-chart-legend{display:flex;flex-wrap:wrap;gap:12px 22px;border:0;padding:0;margin:0;min-width:0}
+.reserve-chart-legend>legend{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.reserve-chart-reserve,.reserve-chart-toggle{display:flex;align-items:center;gap:8px;min-width:0;min-height:38px;color:var(--ink)}
+.reserve-chart-toggle{cursor:pointer}
+.reserve-chart-toggle input{width:15px;height:15px;padding:0;margin:0;flex-shrink:0;accent-color:var(--green)}
+.reserve-chart-legend svg{flex-shrink:0}
+.reserve-chart-legend strong{display:block;font-size:12px;font-weight:600}
+.reserve-chart-legend small{display:block;font-size:10px;line-height:1.5;margin-top:2px}
+.reserve-chart-toggle.unavailable{cursor:default;color:var(--muted)}
+.reserve-chart-help{font-size:11px!important;margin:12px 0 5px!important}
+.reserve-chart-unavailable{font-size:11px!important;margin:12px 0 0!important}
+.reserve-growth-panel .reserve-outlook{margin:22px 0 0}
+@media(max-width:640px){.reserve-chart-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}.reserve-chart-reserve{grid-column:1/-1}.reserve-chart-toggle{gap:5px;align-items:flex-start;padding-top:3px}.reserve-chart-toggle input{margin-top:2px}.reserve-chart-toggle svg{width:18px;margin-top:3px}.reserve-chart-legend small{font-size:9px}.reserve-chart-help{font-size:10px!important}.reserve-growth-panel .reserve-outlook{margin-top:18px}}
 .import-detection-note{font-size:12px!important;line-height:1.8!important;margin-bottom:13px!important}
 .import-month-options{font-size:12px;margin-bottom:22px;color:var(--text-secondary)}
 .import-month-options summary{font-weight:500;color:var(--green);cursor:pointer;margin-bottom:14px}

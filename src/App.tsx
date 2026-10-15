@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronLeft, ChevronRight, Cloud, Download, FileSpreadsheet, FolderUp, LayoutDashboard, Leaf, ListFilter, LoaderCircle, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, TrendingUp, Upload, Wallet, X, Tag } from 'lucide-react';
 import type { FinanceData, ImportResult, PlanItem, Transaction, TransactionKind } from './lib/types';
 import { addMonths, applyImport, createEmptyData, formatMoney, formatMonth, getTransactionScope, mergeFinanceData, parseMoneyToCents, planAmountForMonth, previewDuplicateCount, projectReserve, summarizeMonth } from './lib/finance';
@@ -17,7 +17,7 @@ import { setPlanMonthAmount, setPlanMonthlyAmount } from './lib/planning';
 import { appendPlanItem, getOrderedPlanItems, movePlanItem } from './lib/planOrder';
 import { PlanningAssumptions, PlanningMetrics, PlanningIndicatorsTable } from './components/PlanningInsights';
 import { BudgetComparisonCard, CategoryBreakdown } from './components/OverviewInsights';
-import { ReserveOutlook } from './components/ReserveOutlook';
+import { ReserveGrowthChart } from './components/ReserveGrowthChart';
 import { TransactionModal } from './components/TransactionModal';
 import { createLocalSaveQueue } from './lib/localSave';
 import { prepareImportReview } from './lib/importReview';
@@ -471,6 +471,7 @@ export default function App() {
       </>}
 
       {page === 'plan' && <>
+        <ReserveGrowthChart rows={projection} />
         <section className="panel plan-table-panel">
           <div className="panel-header"><div><h2>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
           <div className="plan-controls"><span>{formatMonth(visiblePlanningMonths[0].month)} – {formatMonth(visiblePlanningMonths.at(-1)!.month)}</span><div><button className="icon-button" disabled={visiblePlanOffset === 0} onClick={() => setPlanOffset(Math.max(0, visiblePlanOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={visiblePlanOffset + 6 >= projection.length} onClick={() => setPlanOffset(visiblePlanOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
@@ -489,7 +490,6 @@ export default function App() {
           <Metric label="Monthly savings" value={formatMoney(shownMonth.netCents)} detail={`${formatMonth(shownMonth.month)} · income minus expenses`} icon={<TrendingUp size={18} />} />
           <Metric label="Projected reserve" value={formatMoney(finalProjection?.closingCents ?? 0)} detail={`At the end of ${formatMonth(finalProjection!.month)}`} icon={<Wallet size={18} />} tint />
         </div>
-        <section className="panel"><div className="panel-header"><div><h2>Reserve growth</h2><p>Your reserve at the start of each month, based on the budget above.</p></div></div><ReserveOutlook rows={projection} /><div className="chart tall"><ResponsiveContainer width="100%" height="100%"><AreaChart data={projection} margin={{ top: 15, right: 15, left: 15, bottom: 5 }}><defs><linearGradient id="reserveGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--green)" stopOpacity={0.25} /><stop offset="100%" stopColor="var(--green)" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={value => formatMonth(value)} minTickGap={45} axisLine={false} tickLine={false} tick={chartTick} /><YAxis tickFormatter={moneyAxis} width="auto" axisLine={false} tickLine={false} tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={value => formatMoney(Number(value))} labelFormatter={value => formatMonth(String(value))} /><Area isAnimationActive={false} type="monotone" dataKey="openingCents" name="Opening reserve" stroke="var(--green)" strokeWidth={3} fill="url(#reserveGradient)" /></AreaChart></ResponsiveContainer></div></section>
         <details className="panel simple-plan-extra simple-plan-settings"><summary>Plan settings <span className="plan-settings-hint">Starting reserve, monthly income, and forecast assumptions</span></summary>
           <div className="simple-plan-settings-body">
             <div className="simple-plan-inputs">

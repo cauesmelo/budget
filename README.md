@@ -46,7 +46,9 @@ Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplu
 
 ## Medium-term planning
 
-Your planned expenses come first. Open **Plan settings** below the reserve chart to set your **Starting reserve** and **Monthly income**; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
+The **Reserve growth** chart comes first, comparing opening reserve with the **PMS**, **PMR**, **PI**, and **PNIF** targets for each month. All calculated targets appear initially on the same currency scale. Use the legend checkboxes to hide targets and let the scale adjust to the visible lines. Missing targets stay uncalculated and leave gaps; no age or return assumption is invented. The PMS progress and projected reach date appear below the plot.
+
+Enter your planned expenses in the table below the chart. Open **Plan settings** to set your **Starting reserve** and **Monthly income**; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
 
 Use the up and down arrows beside an item name to reorder planned expenses or savings targets within their table. The order is saved locally, included in backups and Drive sync, and kept separate from financial edits. New items appear at the end; reordering does not change amounts or reserve calculations.
 
