@@ -231,8 +231,8 @@ export function projectReserve(data: FinanceData): ProjectionMonth[] {
       else if (item.kind === 'expense') expenseCents = safeCents(expenseCents + amount);
       else if (item.kind === 'contribution') contributionCents = safeCents(contributionCents + amount);
     }
-    // Returns apply only to the opening balance; the monthly surplus enters the closing balance.
-    const returnCents = roundCents(openingCents * monthlyReturnPercent / 100);
+    // Only saved assets earn investment returns; a reserve shortfall is not a debt-interest model.
+    const returnCents = roundCents(Math.max(0, openingCents) * monthlyReturnPercent / 100);
     const netCents = safeCents(incomeCents - expenseCents);
     const availableCents = safeCents(netCents - contributionCents);
     const closingCents = safeCents(safeCents(openingCents + netCents) + safeCents(returnCents));

@@ -19,12 +19,12 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 
 ## First use
 
-1. Choose the **Card billing month** and import your Itaú bank and card statements in `.xls` or `.xlsx` format. Review any warnings and confirm.
+1. Import your Itaú bank and card statements in `.xls` or `.xlsx` format. Card billing months are detected automatically. Review the reporting period, suggestions, and warnings before confirming; use **Set a card month manually** only when detection is missing or incorrect.
 2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type and scope when necessary.
 3. In **Medium-term plan**, enter your opening reserve, expected income, expenses, and planning horizon. Edit the monthly amounts and follow the charts.
 4. In **Data and cloud**, export a backup or configure the Google Drive connection.
 
-Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Changes to these fields in a new statement may require review.
+Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Entries matching recorded details with a different amount appear under **Review possible repeats**. Review them or use **Skip this entry**; possible repeats are never removed automatically, because they can also be legitimate separate purchases. A manual billing-month override applies to all card files selected together.
 
 ## Categories
 
@@ -34,6 +34,16 @@ Categories already present in your data are added to the catalog automatically. 
 
 Planning uses expense names, a repeating monthly amount, and editable amounts for individual months. Categories apply to actual transactions.
 
+New imports can prefill a category and description from unambiguous reviewed expenses with the same normalized merchant text, source, account, and scope. Conflicting, archived, or unknown categories prevent learning; transaction types, amounts, and work scope are never inferred. Review the prefilled fields before confirming. For existing expenses, **Apply to N similar** explicitly assigns the selected category to matching uncategorized expenses without overwriting reviewed categories or changing scope.
+
+## Understanding your month
+
+Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplus** from imported and manual personal transactions. These are records so far, not proof that every statement has been imported or that the month is complete. Empty months are identified explicitly. Work cash flow stays separate.
+
+**Where your money goes** lists net category amounts and their shares of positive category spending. Categories with net refunds appear separately; the signed totals reconcile to net spending. Select a category to review its transactions.
+
+**Spending vs plan** compares recorded personal spending, net of refunds, with that month's planned expenses. It shows the amount remaining or over plan. Missing plans and months without recorded spending have separate messages. The reserve forecast remains based on your plan, rather than a measured account balance.
+
 ## Medium-term planning
 
 Enter your **Starting reserve** and **Monthly income**, then add the expenses you expect. The **Monthly (R$)** column repeats the amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
@@ -41,6 +51,8 @@ Enter your **Starting reserve** and **Monthly income**, then add the expenses yo
 For a changing card commitment, enter the expected amount directly in each month. Include only installments not already covered by other expense rows. No row type, behavior, or date setup is required. Importing a statement does not automatically change planned amounts or create future actual transactions.
 
 The main page shows planned spending, monthly savings, and the reserve projected at the end of the horizon. The chart shows the reserve at the **beginning** of each month; the closing balance becomes the next month’s opening reserve. Monthly savings are planned income minus spending.
+
+Set an optional **Reserve goal** to see whether it is already met, when the forecast reaches it, or whether it lies beyond the selected horizon. Dates refer to the start of a month, except a goal first reached at the final month's end, which is labeled explicitly. The outlook shows how many months of first-month planned spending your starting reserve covers, warns about the first projected shortfall, and flags a later fall below a reached goal. Zero clears the goal; no spending estimate means coverage is not calculated. The forecast assumes planned income arrives and the surplus stays saved.
 
 Optional controls stay collapsed:
 
@@ -87,8 +99,14 @@ Work cash flow is separate from the independent medium-term plan; review planned
 - Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
 - A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.
 - Planning is independent of actual transactions. Importing a statement does not automatically change your forecast.
-- Closing reserve = opening reserve + planned income − spending expenses + expected return on the opening reserve. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.
+- Closing reserve = opening reserve + planned income − spending expenses + expected return on a positive opening reserve. Negative reserves earn no investment return; debt interest is not modeled. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.
 - An open card bill can change, and bank transactions can use future processing dates. Import warnings help you review these cases.
+
+The budgeting workflow is informed by the [Banco Central do Brasil's personal budgeting material](https://www.bcb.gov.br/meubc/faqs/p/o-que-e-um-orcamento-pessoal) and the [CFPB's emergency-fund guide](https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/): record income and spending, plan ahead, set a savings goal, and monitor progress. Coverage and goal dates describe your inputs and assumptions; they do not prescribe an individualized emergency-fund amount or investment strategy.
+
+## Editing and local saves
+
+Money fields commit when you leave the field or press **Enter**; **Escape** cancels the current edit. Committed changes enter an immediate, ordered local-save queue, and the header reports when they are saved in this browser. A failed save offers a retry or backup export. Deleting a transaction or planning item offers **Undo** for 10 seconds, restoring the same record.
 
 ## Cloud storage without a paid server
 
@@ -97,6 +115,8 @@ The implemented option is **Google Drive**, using the application's own folder a
 Drive setup requires an OAuth client ID created in your Google account. It does not require a banking password, client secret, or server. Authorization requests only `drive.appdata`. The token stays in memory, and you may need to reconnect when it expires. Follow the [setup and comparison guide](docs/CLOUD.md), with official sources and limits researched in October 2026.
 
 On another computer, use the same OAuth client ID and **synchronize before starting**. Synchronization is triggered by the button and should be repeated after making changes. It merges the latest copies from your computers and saves a new copy to Drive, keeping previous copies. If the same record is edited on two computers, the edit with the latest timestamp wins. Keep the computers' clocks accurate. Deletions are also synchronized. Concurrent changes to fields of the same record are not merged individually. If two devices select the same imported installment into different rows, the latest row keeps that purchase; the other row retains its unrelated schedules and monthly overrides.
+
+**Saved in this browser** refers to local storage. When Drive is configured, the header offers manual synchronization and distinguishes pending changes from data synchronized in the current session. A successful sync does not include edits made while that sync was running; those remain pending for the next sync.
 
 ## Personal data and GitHub
 
@@ -115,7 +135,7 @@ npm test
 npm run build
 ```
 
-Tests cover calculations in cents, refunds, contributions, fixed/monthly/installment projections, Cerbasi indicators, duplicate commitments, migration, deletions, backup validation, and synchronization with mocked Google calls.
+Tests cover calculations in cents, signed category totals, spending comparisons, reserve goals and shortfalls, contributions, fixed/monthly/installment projections, Cerbasi indicators, import learning and possible repeats, duplicate commitments, ordered local saves, migration, deletions, backup validation, and synchronization with mocked Google calls.
 
 Optional tests are available for bank and card statement files. They read the files directly without copying them into the project:
 
@@ -127,4 +147,4 @@ The default filenames are `statement.xls` and `invoice.xlsx`. To use other names
 
 ## Structure
 
-`src/App.tsx` contains the screens. `src/lib/categories.ts` manages the category catalog and category migration. `src/lib/importers.ts` reads supported formats. `src/lib/finance.ts` calculates totals, projections, and merges. `src/lib/storage.ts` validates and stores data in IndexedDB. `src/lib/drive.ts` handles Google authorization and copy synchronization. The application uses React, TypeScript, Vite, Recharts, and the official SheetJS CE distribution.
+`src/App.tsx` contains the screens, with reusable views in `src/components`. `src/lib/categories.ts` manages the category catalog and category migration. `src/lib/importers.ts` reads supported formats; `importReview.ts` and `categoryLearning.ts` prepare conservative suggestions. `src/lib/finance.ts` calculates totals, projections, and merges; `insights.ts` calculates comparisons and goal progress. `src/lib/storage.ts` validates and stores data in IndexedDB, with ordered writes in `localSave.ts`. `src/lib/drive.ts` handles Google authorization and copy synchronization. The application uses React, TypeScript, Vite, Recharts, and the official SheetJS CE distribution.

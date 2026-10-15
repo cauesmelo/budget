@@ -29,7 +29,7 @@ export function PlanGridRow({
   editableName = true, editableMonthly = true, removable = true,
 }: PlanGridRowProps) {
   const monthlyAmount = item.behavior === 'monthly' || item.behavior === 'installments' ? 0 : item.defaultAmountCents;
-  return <tr>
+  return <tr data-plan-id={item.id}>
     <td>{editableName
       ? <input aria-label="Item name" value={item.name} onChange={event => onPatch(item.id, { name: event.target.value })} />
       : <span className="simple-plan-label">{item.name}</span>}</td>
@@ -54,7 +54,7 @@ export function PlanGridRow({
 }
 
 export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, children }: PlanGridProps) {
-  return <div className="table-scroll">
+  return <><p className="table-swipe-hint">Swipe horizontally to see the months.</p><div className="table-scroll">
     <table className="plan-table simple-plan-table">
       <thead><tr><th>Item</th><th>Monthly (R$)</th>{months.map(({ month }) => <th key={month}>{formatMonth(month)}</th>)}<th /></tr></thead>
       <tbody>
@@ -62,5 +62,5 @@ export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, children 
         {children}
       </tbody>
     </table>
-  </div>;
+  </div></>;
 }

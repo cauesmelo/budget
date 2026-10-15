@@ -143,3 +143,78 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .simple-plan-indicators{margin-top:24px}
 .simple-plan-indicators>.planning-assumptions:last-child{margin-bottom:0}
 @media(max-width:640px){.simple-plan-inputs{grid-template-columns:1fr 1fr;gap:13px}.simple-plan-inputs .field>span{font-size:11px}.simple-plan-inputs input{font-size:16px;padding:10px;min-width:0}.simple-plan-options>.settings-grid{grid-template-columns:1fr;gap:16px}.simple-plan-options .field>span{min-height:0}.simple-plan-extra>summary{font-size:14px}.simple-plan-extra-actions{justify-content:flex-start}}
+
+.local-save-status{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.header-sync{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--green);font-size:11px;white-space:nowrap}
+.header-sync:disabled{opacity:.6;cursor:wait}
+.page-heading h1:focus{outline:none}
+.month-data-note{padding:12px 15px;margin-bottom:18px;border:1px solid var(--border);border-radius:7px;background:var(--surface-soft);font-size:12px;line-height:1.8;color:var(--text-secondary)}
+.budget-comparison-values,.spending-breakdown-totals{margin:0;display:grid;gap:12px;font-variant-numeric:tabular-nums}
+.budget-comparison-values>div,.spending-breakdown-totals>div{display:flex;align-items:baseline;justify-content:space-between;gap:15px}
+.budget-comparison-values dt,.spending-breakdown-totals dt{font-size:12px;color:var(--text-secondary)}
+.budget-comparison-values dd,.spending-breakdown-totals dd{font-size:14px;margin:0;color:var(--ink);font-weight:600;white-space:nowrap}
+.budget-comparison-result{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:22px;color:var(--green)}
+.budget-comparison-result>strong{font-family:Manrope,sans-serif;font-size:29px;letter-spacing:-.7px}
+.budget-comparison-result>span{font-size:12px;font-weight:500}
+.budget-comparison-result.over-plan{color:#9b3d32}
+.budget-comparison-empty{font-size:13px!important;margin:12px 0 20px!important;line-height:1.8!important}
+.budget-comparison-note{font-size:11px!important;line-height:1.8!important;margin:12px 0 17px!important}
+.spending-breakdown-list{list-style:none;padding:0;margin:0}
+.spending-breakdown-list>li+li{border-top:1px solid var(--border)}
+.spending-breakdown-category{width:100%;display:block;border:0;background:none;color:var(--ink);text-align:left;padding:12px 0;border-radius:3px}
+.spending-breakdown-category:hover{background:var(--surface-soft)}
+.spending-breakdown-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-size:12px}
+.spending-breakdown-name{overflow-wrap:anywhere}
+.spending-breakdown-row>strong{font-size:13px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.spending-breakdown-share{display:block;font-size:10px;color:var(--muted);margin-top:4px}
+.spending-breakdown-bar{height:5px;display:block;background:#e7eee1;border-radius:4px;overflow:hidden;margin-top:7px}
+.spending-breakdown-bar>span{height:100%;display:block;background:var(--green);border-radius:4px}
+.spending-breakdown-more{margin-top:10px;font-size:12px;color:var(--green)}
+.spending-breakdown-more summary{cursor:pointer;line-height:1.8}
+.spending-breakdown-refunds{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}
+.spending-breakdown-refunds h3{font-size:12px;color:var(--text-secondary);font-weight:600;margin:0 0 4px}
+.spending-breakdown-refunds .spending-breakdown-row>strong{color:var(--green)}
+.spending-breakdown-totals{margin-top:20px;padding-top:17px;border-top:1px solid var(--border);gap:10px}
+.spending-breakdown-net{font-weight:650}
+.spending-breakdown-note{font-size:11px!important;line-height:1.7!important;margin:13px 0 0!important}
+.spending-breakdown-empty{padding:30px 0;color:var(--muted)}
+.spending-breakdown-empty h3{font-size:14px;font-weight:500;color:var(--text-secondary)}
+.spending-breakdown-empty p{font-size:12px;line-height:1.8}
+.reserve-outlook{margin-bottom:20px;padding:19px;border:1px solid var(--border);border-radius:8px;background:var(--surface-soft)}
+.reserve-outlook-main{display:grid;grid-template-columns:220px minmax(0,1fr);gap:25px;align-items:start}
+.reserve-outlook-goal{margin-bottom:0}
+.reserve-outlook-goal-status{font-size:14px!important;line-height:1.7!important;color:var(--ink)!important;font-weight:500;margin:0 0 12px!important}
+.reserve-outlook-status>small{font-size:11px;color:var(--muted);line-height:1.8}
+.reserve-outlook-progress{margin-bottom:8px}
+.reserve-outlook-coverage{font-size:12px!important;line-height:1.8!important;margin-top:10px!important}
+.reserve-outlook-warnings{display:grid;gap:10px;margin-top:16px}
+.reserve-outlook-warnings .alert{margin:0;display:block;font-size:12px;line-height:1.8}
+.reserve-outlook-warnings strong{font-weight:650}
+.reserve-outlook-assumption{font-size:11px!important;line-height:1.8!important;margin:15px 0 0!important}
+.import-detection-note{font-size:12px!important;line-height:1.8!important;margin-bottom:13px!important}
+.import-month-options{font-size:12px;margin-bottom:22px;color:var(--text-secondary)}
+.import-month-options summary{font-weight:500;color:var(--green);cursor:pointer;margin-bottom:14px}
+.import-month-options .field{margin:14px 0}
+.import-month-toggle{display:flex;align-items:center;gap:9px;font-size:12px}
+.import-month-toggle input{width:16px;height:16px;accent-color:var(--green);flex-shrink:0}
+.import-period{font-weight:600!important;color:var(--ink)!important;margin-top:8px!important}
+.import-learning-note{padding:12px 14px;background:#e7f0df;border:1px solid var(--border);border-radius:7px;font-size:12px!important;line-height:1.8!important;margin:0 0 16px!important}
+.possible-duplicates{border:1px solid #d8c79b;background:#faf6e9;padding:16px;border-radius:8px;margin-bottom:20px}
+.possible-duplicates h3{font-size:14px;font-weight:600;margin:0 0 8px}
+.possible-duplicates>p{font-size:12px;line-height:1.8;margin-bottom:10px}
+.possible-duplicate-row{display:flex;align-items:center;justify-content:space-between;gap:17px;padding:12px 0;border-top:1px solid #ded4b9}
+.possible-duplicate-row>div{min-width:0}
+.possible-duplicate-row strong{font-size:12px;display:block;overflow-wrap:anywhere}
+.possible-duplicate-row small{font-size:11px;line-height:1.8;display:block;margin-top:4px}
+.possible-duplicate-row>.text-button{font-size:12px;flex-shrink:0}
+.undo-toast{position:fixed;z-index:95;bottom:22px;right:25px;max-width:min(560px,calc(100vw - 36px));display:flex;align-items:center;gap:18px;padding:13px 16px;border:1px solid var(--border);background:var(--ink);color:#fff;border-radius:9px;box-shadow:0 7px 24px #142b2926;font-size:12px}
+.undo-toast>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo-toast .text-button,.undo-toast .icon-button{color:#d9edbc;flex-shrink:0}
+.undo-toast .text-button{font-weight:600;font-size:12px}
+.undo-toast button:focus-visible{outline-color:#d9edbc}
+.table-swipe-hint{display:none}
+.reset-month{min-width:24px;min-height:30px;align-items:center;justify-content:center}
+@media(max-width:1150px){.reserve-outlook-main{grid-template-columns:190px minmax(0,1fr);gap:20px}.local-save-status{max-width:165px}}
+@media(max-width:640px){.local-save-status{max-width:120px;font-size:9px}.header-sync{padding:5px;border:0;background:transparent}.header-sync>span{display:none}.reserve-outlook{padding:15px}.reserve-outlook-main{grid-template-columns:1fr;gap:15px}.reserve-outlook-goal{max-width:230px}.reserve-outlook-goal-status{font-size:13px!important}.budget-comparison-result>strong{font-size:26px}.budget-comparison-values dt,.spending-breakdown-totals dt{font-size:11px}.spending-breakdown-row{font-size:12px}.possible-duplicate-row{align-items:flex-start;flex-direction:column;gap:9px}.undo-toast{bottom:80px;right:18px;gap:13px}.table-swipe-hint{display:block;font-size:11px!important;color:var(--muted)!important;margin:0 0 12px!important}.reset-month{min-width:28px;min-height:34px}}
+
+.apply-category { display: block; margin-top: 8px; font-size: 11px; text-align: left; }

@@ -95,11 +95,26 @@ describe('reserve planning', () => {
     expect(planAmountForMonth(item, '2027-02')).toBe(0);
   });
 
-  it('rounds each month, preserves signed deficits, and excludes actual transactions from forecasts', () => {
+  it('preserves reserve shortfalls without applying an investment return to debt or actual transactions', () => {
     const data = createEmptyData(NOW);
     data.settings = { ...data.settings, initialReserveCents: -101, monthlyReturnPercent: 50, horizonMonths: 2 };
     data.transactions = [transaction('large-real-income', 1_000_000)];
-    expect(projectReserve(data).map(item => item.closingCents)).toEqual([-152, -228]);
+    expect(projectReserve(data).map(item => ({ returnCents: item.returnCents, closingCents: item.closingCents }))).toEqual([
+      { returnCents: 0, closingCents: -101 }, { returnCents: 0, closingCents: -101 },
+    ]);
+    data.settings.monthlyReturnPercent = -50;
+    expect(projectReserve(data).map(item => item.closingCents)).toEqual([-101, -101]);
+  });
+
+  it('resumes investment returns after the planned reserve becomes positive', () => {
+    const data = createEmptyData(NOW);
+    data.settings = { ...data.settings, initialReserveCents: -100, monthlyReturnPercent: 10, horizonMonths: 3 };
+    data.planItems = [planItem('income', 'income', 200)];
+    expect(projectReserve(data).map(item => ({ openingCents: item.openingCents, returnCents: item.returnCents, closingCents: item.closingCents }))).toEqual([
+      { openingCents: -100, returnCents: 0, closingCents: 100 },
+      { openingCents: 100, returnCents: 10, closingCents: 310 },
+      { openingCents: 310, returnCents: 31, closingCents: 541 },
+    ]);
   });
 });
 
