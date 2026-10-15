@@ -1,5 +1,5 @@
-import type { FinanceData, ImportResult, MonthSummary, PlanItem, ProjectionMonth, Transaction } from './types';
-import { mergeCategoryCatalog, normalizeCategoryData } from './categories';
+import type { FinanceData, ImportResult, MonthSummary, PlanItem, ProjectionMonth, Transaction, TransactionScope } from './types';
+import { categoryNameKey, mergeCategoryCatalog, normalizeCategoryData } from './categories';
 import { canonicalAccountIdentity } from './identity';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -138,6 +138,21 @@ export function legacyIncomeForMonth(data: FinanceData, month: string): number |
     (period.startMonth === undefined || month >= period.startMonth) && month <= period.endMonth)?.incomeCents;
 }
 
+function workCategoryKeys(data: FinanceData): Set<string> {
+  const keys = new Set(data.work?.expenseCategories.map(categoryNameKey) ?? []);
+  for (const category of data.categories) {
+    const labels = [category.name, ...(category.aliases ?? [])].map(categoryNameKey);
+    if (labels.some(label => keys.has(label))) for (const label of labels) keys.add(label);
+  }
+  return keys;
+}
+
+/** Expense rules never classify salary or another income as a reimbursement. */
+export function getTransactionScope(data: FinanceData, transaction: Transaction): TransactionScope {
+  if (transaction.scope !== undefined) return transaction.scope;
+  return transaction.kind === 'expense' && workCategoryKeys(data).has(categoryNameKey(transaction.category)) ? 'work' : 'personal';
+}
+
 export function summarizeMonth(data: FinanceData, month: string, mode: 'auto' | 'transactions' | 'budget' = 'auto'): MonthSummary {
   if (!isValidMonth(month)) throw new Error('Invalid month.');
   const sourceMode = resolveMonthMode(data, month, mode);
@@ -146,8 +161,13 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'auto' | 
   const originals = data.transactions.filter(item => item.month === month &&
     (sourceMode === 'budget' ? item.source === 'budget' || (includeManualCorrections && item.source === 'manual') : item.source !== 'budget'));
   const transactions = originals.filter(item => !item.deletedAt && item.kind !== 'transfer');
+  const workCategories = workCategoryKeys(data);
+  const scope = (item: Transaction): TransactionScope => item.scope ?? (item.kind === 'expense' && workCategories.has(categoryNameKey(item.category)) ? 'work' : 'personal');
   let incomeCents = 0;
   let expenseCents = 0;
+  let workInCents = 0;
+  let workOutCents = 0;
+  let count = 0;
   let categories: Record<string, number> = {};
   if (sourceMode === 'budget') {
     const snapshot = data.snapshots.filter(item => item.month === month).sort((a, b) => compareRecords(a, b)).at(-1);
@@ -156,12 +176,25 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'auto' | 
       incomeCents = snapshot.incomeCents;
       expenseCents = snapshot.expenseCents;
       categories = { ...snapshot.categories };
+      for (const [category, amount] of Object.entries(categories)) {
+        if (!workCategories.has(categoryNameKey(category))) continue;
+        expenseCents -= amount;
+        if (amount >= 0) workOutCents += amount;
+        else workInCents -= amount;
+        delete categories[category];
+      }
     }
     // Editable transactions take precedence, even when all of them have been deleted.
     // An older snapshot may contain aggregated income without income transactions.
-    else if (snapshot && !budgetOriginals.some(item => item.kind === 'income')) incomeCents = snapshot.incomeCents;
+    else if (snapshot && !budgetOriginals.some(item => item.kind === 'income' && scope(item) === 'personal')) incomeCents = snapshot.incomeCents;
   }
   for (const transaction of transactions) {
+    if (scope(transaction) === 'work') {
+      if (transaction.amountCents >= 0) workInCents += transaction.amountCents;
+      else workOutCents -= transaction.amountCents;
+      continue;
+    }
+    count++;
     if (transaction.kind === 'income') incomeCents += transaction.amountCents;
     else {
       const amount = -transaction.amountCents;
@@ -172,7 +205,7 @@ export function summarizeMonth(data: FinanceData, month: string, mode: 'auto' | 
   }
   // A historical income assumption replaces the aggregate without creating transactions.
   if (fixedIncomeCents !== undefined) incomeCents = fixedIncomeCents;
-  return { month, incomeCents, expenseCents, netCents: incomeCents - expenseCents, categories, count: transactions.length };
+  return { month, incomeCents, expenseCents, netCents: incomeCents - expenseCents, categories, count, workInCents, workOutCents, workNetCents: workInCents - workOutCents };
 }
 
 /** Within the active interval, an explicit monthly amount overrides the recurring amount. */
@@ -311,15 +344,17 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
   remote = normalizeCategoryData(remote);
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
-  const pristineLocal = local.tracking === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
+  const pristineLocal = local.tracking === undefined && local.work === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.snapshots.length === 0 && local.imports.length === 0 &&
     local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
-  const remoteHasSavedState = remote.tracking !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
+  const remoteHasSavedState = remote.tracking !== undefined || remote.work !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.snapshots.length > 0 || remote.imports.length > 0 ||
     remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings;
   const tracking = local.tracking === undefined ? remote.tracking : remote.tracking === undefined ? local.tracking :
     compareRecords(local.tracking, remote.tracking) >= 0 ? local.tracking : remote.tracking;
+  const work = local.work === undefined ? remote.work : remote.work === undefined ? local.work :
+    compareRecords(local.work, remote.work) >= 0 ? local.work : remote.work;
   const merged = {
     version: 1 as const,
     categories: mergeCategoryCatalog(local.categories, remote.categories),
@@ -329,6 +364,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     imports: mergeRecords(local.imports, remote.imports),
     settings: { ...settings, googleClientId: local.settings.googleClientId },
     ...(tracking !== undefined ? { tracking: structuredClone(tracking) } : {}),
+    ...(work !== undefined ? { work: structuredClone(work) } : {}),
     updatedAt: Date.parse(local.updatedAt) >= Date.parse(remote.updatedAt) ? local.updatedAt : remote.updatedAt,
   };
   return normalizeCategoryData(merged, false);

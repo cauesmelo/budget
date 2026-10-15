@@ -55,7 +55,7 @@ describe('monthly summary', () => {
     ];
     expect(summarizeMonth(data, '2026-10')).toEqual({
       month: '2026-10', incomeCents: 300_000, expenseCents: 25_000, netCents: 275_000,
-      categories: { Food: 25_000 }, count: 4,
+      categories: { Food: 25_000 }, count: 4, workInCents: 0, workOutCents: 0, workNetCents: 0,
     });
     expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(100_000);
     data.snapshots.push({ id: 'snapshot', month: '2026-10', incomeCents: 250_000, expenseCents: 110_000, categories: { General: 110_000 }, updatedAt: NOW.toISOString() });
@@ -68,7 +68,7 @@ describe('monthly summary', () => {
     const data = createEmptyData(NOW);
     data.snapshots = [{ id: 'budget-snapshot', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { Previous: 30_000 }, updatedAt: NOW.toISOString() }];
     data.transactions = [transaction('budget-1', -10_000, { source: 'budget', category: 'New category' }), transaction('budget-2', -20_000, { source: 'budget', kind: 'transfer' })];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 10_000, netCents: 30_000, categories: { 'New category': 10_000 }, count: 1 });
+    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 10_000, netCents: 30_000, categories: { 'New category': 10_000 }, count: 1, workInCents: 0, workOutCents: 0, workNetCents: 0 });
     data.transactions[0].deletedAt = NOW.toISOString();
     expect(summarizeMonth(data, '2026-10', 'budget').expenseCents).toBe(0);
     expect(summarizeMonth(data, '2026-10', 'budget').categories).toEqual({});
@@ -83,7 +83,7 @@ describe('monthly summary', () => {
     const data = createEmptyData(NOW);
     data.snapshots = [{ id: 'snapshot-only', month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, categories: { History: 30_000 }, updatedAt: NOW.toISOString() }];
     data.transactions = [transaction('bank-real', -99_000)];
-    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, netCents: 10_000, categories: { History: 30_000 }, count: 0 });
+    expect(summarizeMonth(data, '2026-10', 'budget')).toEqual({ month: '2026-10', incomeCents: 40_000, expenseCents: 30_000, netCents: 10_000, categories: { History: 30_000 }, count: 0, workInCents: 0, workOutCents: 0, workNetCents: 0 });
   });
 
   it('preserves empty categories and names matching object properties', () => {

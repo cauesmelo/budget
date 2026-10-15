@@ -1,5 +1,6 @@
 export type TransactionKind = 'income' | 'expense' | 'transfer';
 export type TransactionSource = 'bank' | 'card' | 'budget' | 'manual';
+export type TransactionScope = 'personal' | 'work';
 export interface Transaction {
   id: string;
   fingerprint: string;
@@ -12,6 +13,7 @@ export interface Transaction {
   originalDescription: string;
   description: string;
   category: string;
+  scope?: TransactionScope;
   installment?: string;
   importId?: string;
   sourceFile?: string;
@@ -74,6 +76,11 @@ export interface TrackingConfiguration {
   legacyIncomePeriods: LegacyIncomePeriod[];
   updatedAt: string;
 }
+export interface WorkConfiguration {
+  label: string;
+  expenseCategories: string[];
+  updatedAt: string;
+}
 export interface FinanceData {
   version: 1;
   categories: Category[];
@@ -83,6 +90,7 @@ export interface FinanceData {
   imports: ImportBatch[];
   settings: Settings;
   tracking?: TrackingConfiguration;
+  work?: WorkConfiguration;
   updatedAt: string;
 }
 export interface ImportResult {
@@ -95,5 +103,5 @@ export interface ImportResult {
   summary?: string;
 }
 export interface ImportOptions { cardMonth?: string; referenceYear?: number }
-export interface MonthSummary { month: string; incomeCents: number; expenseCents: number; netCents: number; categories: Record<string, number>; count: number }
+export interface MonthSummary { month: string; incomeCents: number; expenseCents: number; netCents: number; categories: Record<string, number>; count: number; workInCents: number; workOutCents: number; workNetCents: number }
 export interface ProjectionMonth { month: string; openingCents: number; incomeCents: number; expenseCents: number; returnCents: number; netCents: number; closingCents: number }

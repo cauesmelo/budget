@@ -2,7 +2,7 @@ import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth, reconcilePlanSegments } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
 import { categoryNameKey, normalizeCategoryData } from './categories';
-import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, TrackingConfiguration, Transaction, TransactionKind, TransactionSource } from './types';
+import type { BudgetSnapshot, Category, FinanceData, ImportBatch, PlanItem, Settings, TrackingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
 
 const DATA_KEY = 'finance-data-v1';
 // The original Portuguese store name is required to read existing local data.
@@ -123,6 +123,7 @@ function transaction(value: unknown, path: string): Transaction {
     originalDescription: string(source.originalDescription, `${path}.originalDescription`),
     description: string(source.description, `${path}.description`),
     category: string(source.category, `${path}.category`, true, 500),
+    ...(source.scope !== undefined ? { scope: oneOf<TransactionScope>(source.scope, ['personal', 'work'], `${path}.scope`) } : {}),
     ...(installment !== undefined ? { installment } : {}),
     ...(importId !== undefined ? { importId } : {}),
     ...(sourceFile !== undefined ? { sourceFile } : {}),
@@ -230,6 +231,24 @@ function tracking(value: unknown): TrackingConfiguration {
   return { startMonth, legacyIncomePeriods, updatedAt: timestamp(source.updatedAt, 'tracking.updatedAt') };
 }
 
+function work(value: unknown): WorkConfiguration {
+  const source = object(value, 'work');
+  const label = string(source.label, 'work.label', false, 120);
+  if (label !== label.normalize('NFC').trim().replace(/\s+/g, ' ') || /[\u0000-\u001f\u007f]/.test(label)) fail('work.label', 'must contain a readable name without excess whitespace');
+  if (!Array.isArray(source.expenseCategories) || source.expenseCategories.length > 1_000) fail('work.expenseCategories', 'must be a list of up to 1000 category names');
+  const keys = new Set<string>();
+  const expenseCategories = source.expenseCategories.map((entry, index) => {
+    const path = `work.expenseCategories[${index}]`;
+    const name = string(entry, path, false, 500);
+    if (name !== name.normalize('NFC').trim().replace(/\s+/g, ' ') || /[\u0000-\u001f\u007f]/.test(name)) fail(path, 'must contain a readable category name without excess whitespace');
+    const key = categoryNameKey(name);
+    if (keys.has(key)) fail('work.expenseCategories', 'contains duplicate category names');
+    keys.add(key);
+    return name;
+  });
+  return { label, expenseCategories, updatedAt: timestamp(source.updatedAt, 'work.updatedAt') };
+}
+
 function array<T extends { id: string }>(value: unknown, path: string, parse: (entry: unknown, entryPath: string) => T, maximum: number): T[] {
   if (!Array.isArray(value) || value.length > maximum) fail(path, 'must be a list within the size limit');
   const ids = new Set<string>();
@@ -269,6 +288,7 @@ export function validateBackup(payload: unknown): FinanceData {
     imports: array(source.imports, 'imports', importBatch, 20_000),
     settings: settings(source.settings),
     ...(source.tracking !== undefined ? { tracking: tracking(source.tracking) } : {}),
+    ...(source.work !== undefined ? { work: work(source.work) } : {}),
     updatedAt: timestamp(source.updatedAt, 'updatedAt'),
   };
   try { parsed.planItems = reconcilePlanSegments(parsed.planItems); }

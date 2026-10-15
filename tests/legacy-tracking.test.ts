@@ -110,7 +110,7 @@ describe('legacy income assumptions', () => {
     snapshot(data);
     const before = structuredClone(data);
     const summary = summarizeMonth(data, '2032-07');
-    expect(summary).toEqual({ month: '2032-07', incomeCents: 180_000, expenseCents: 20_000, netCents: 160_000, categories: { 'Example category': 20_000 }, count: 0 });
+    expect(summary).toEqual({ month: '2032-07', incomeCents: 180_000, expenseCents: 20_000, netCents: 160_000, categories: { 'Example category': 20_000 }, count: 0, workInCents: 0, workOutCents: 0, workNetCents: 0 });
     expect(summarizeMonth(data, '2032-07')).toEqual(summary);
     expect(data).toEqual(before);
   });

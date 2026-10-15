@@ -41,6 +41,16 @@ A saved tracking start month marks earlier months **Legacy**. These months use s
 
 Legacy income can use fixed monthly amounts for specified historical periods. Each fixed amount replaces the month's income total, including any imported income, without creating artificial salary transactions. The Legacy badge and income note identify these assumptions; **Data and cloud** shows the configured periods. Tracking rules are private financial data and travel with backups and Drive synchronization independently of reserve settings.
 
+## Personal and work cash flow
+
+The overview's income, expenses, net income, and category charts cover personal transactions. A separate **Work in / out** card shows work credits (reimbursements and refunds) and debits for the selected month. Its review link opens the work transaction filter. Monthly work cash flow is not an outstanding reimbursement balance: an expense and its reimbursement may occur in different months.
+
+Choose **Personal** or **Work** in the **Scope** selector on each transaction, including import previews and manual entries. For a reimbursement, select Work and the income type; the interface labels it **Reimbursement**. Keep salary Personal. Work transfers and deleted records are excluded from both sets of totals. Personal transactions without categories appear in a small review banner above the overview cards.
+
+In **Data and cloud**, customize the work label and optionally select expense categories that should default to Work, including archived historical categories. These category rules apply only to expenses; employer names and income descriptions never classify a deposit as a reimbursement. An explicit transaction scope takes priority over category rules. The work label, rules, and individual scopes are private financial data and are saved with backups and Drive synchronization. Older backups preserve the current work configuration when merged.
+
+Legacy months keep their configured personal income assumptions while work expenses are separated from historical spending. This separation does not change the independent medium-term plan; review planned commitments directly in the planning table.
+
 ## How amounts are handled
 
 - Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
