@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReserveChartData } from '../src/lib/reserveChart';
+import { buildReserveChartData, buildReserveProgressData } from '../src/lib/reserveChart';
 import type { ProjectionMonth } from '../src/lib/types';
 
 function month(month: string, openingCents: number, targets: [number | null, number | null, number | null, number | null]): ProjectionMonth {
@@ -63,4 +63,61 @@ describe('reserve chart data', () => {
     expect(buildReserveChartData([])).toEqual([]);
   });
 
+});
+
+describe('reserve progress chart data', () => {
+  it('compares each monthly target using its opening reserve, regardless of stored indicator progress', () => {
+    const row = month('2032-10', 30_000, [60_000, 120_000, 300_000, 1_200_000]);
+    row.indicators.pms.progressPercent = 99;
+    expect(buildReserveProgressData([row])).toEqual([
+      { month: '2032-10', pms: 50, pmr: 25, pi: 10, pnif: 2.5 },
+    ]);
+  });
+
+  it('recalculates progress when spending changes the target without implying reserve growth', () => {
+    expect(buildReserveProgressData([
+      month('2032-10', 30_000, [60_000, 120_000, 300_000, 1_200_000]),
+      month('2032-11', 30_000, [30_000, 60_000, 150_000, 600_000]),
+    ])).toEqual([
+      { month: '2032-10', pms: 50, pmr: 25, pi: 10, pnif: 2.5 },
+      { month: '2032-11', pms: 100, pmr: 50, pi: 20, pnif: 5 },
+    ]);
+  });
+
+  it('preserves negative, zero, and over-100 percent progress without capping the chart', () => {
+    expect(buildReserveProgressData([
+      month('2032-10', -30_000, [60_000, 120_000, 300_000, 1_200_000]),
+      month('2032-11', 0, [60_000, 120_000, 300_000, 1_200_000]),
+      month('2032-12', 180_000, [60_000, 120_000, 300_000, 1_200_000]),
+    ])).toEqual([
+      { month: '2032-10', pms: -50, pmr: -25, pi: -10, pnif: -2.5 },
+      { month: '2032-11', pms: 0, pmr: 0, pi: 0, pnif: 0 },
+      { month: '2032-12', pms: 300, pmr: 150, pi: 60, pnif: 15 },
+    ]);
+  });
+
+  it('uses gaps for unavailable, zero, or invalid targets instead of infinite or misleading percentages', () => {
+    expect(buildReserveProgressData([
+      month('2032-10', 10_000, [null, 0, -1, Infinity]),
+      month('2032-11', 10_000, [NaN, 0.5, Number.MAX_SAFE_INTEGER + 1, 20_000]),
+      month('2032-12', Infinity, [60_000, 120_000, 300_000, 1_200_000]),
+    ])).toEqual([
+      { month: '2032-10', pms: null, pmr: null, pi: null, pnif: null },
+      { month: '2032-11', pms: null, pmr: null, pi: null, pnif: 50 },
+      { month: '2032-12', pms: null, pmr: null, pi: null, pnif: null },
+    ]);
+  });
+
+  it('does not mutate projection rows, reorder months, or extend the forecast horizon', () => {
+    const rows = [
+      month('2032-11', 10_000, [20_000, 40_000, null, null]),
+      month('2032-10', 5_000, [20_000, 40_000, null, null]),
+    ];
+    const before = structuredClone(rows);
+    const progress = buildReserveProgressData(rows);
+    expect(progress.map(row => row.month)).toEqual(['2032-11', '2032-10']);
+    progress[0].pms = 0;
+    expect(rows).toEqual(before);
+    expect(buildReserveProgressData([])).toEqual([]);
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyData, projectReserve } from '../src/lib/finance';
-import { getBudgetComparison, getCategorySpending, getPmsReserveInsights, getReserveCoverage, getReserveInsights } from '../src/lib/insights';
+import { getBudgetComparison, getCategorySpending, getPmsReserveInsights, getReserveCoverage, getReserveInsights, getReserveTargetInsights } from '../src/lib/insights';
+import type { ReserveTargetKey } from '../src/lib/reserveChart';
 import type { FinanceData, PlanItem, ProjectionMonth, Transaction } from '../src/lib/types';
 
 const NOW = '2032-10-10T12:00:00.000Z';
@@ -117,7 +118,7 @@ describe('PMS reserve milestones', () => {
     expect(getPmsReserveInsights(projection)).toMatchObject({
       openingCents: 5_000, closingCents: 30_000, growthCents: 25_000,
       targetStatus: 'available', hasUnavailableTargets: false,
-      goal: { amountCents: 20_000, progressPercent: 25, remainingCents: 15_000, status: 'projected', month: '2032-12', timing: 'start' },
+      goal: { amountCents: 20_000, progressPercent: 25, remainingCents: 15_000, status: 'projected', month: '2032-11', timing: 'end' },
     });
     expect(projection).toEqual(before);
   });
@@ -130,12 +131,15 @@ describe('PMS reserve milestones', () => {
     ])).goal).toMatchObject({ amountCents: 30_000, status: 'projected', month: '2032-11', timing: 'start' });
   });
 
-  it('does not claim a frozen initial target is reached after future spending raises PMS', () => {
+  it('reports an initial closing achievement and a later drop when future spending raises PMS', () => {
     expect(getPmsReserveInsights(rows([
       { opening: 5_000, closing: 15_000, target: 10_000 },
       { opening: 15_000, closing: 25_000, target: 30_000 },
       { opening: 25_000, closing: 35_000, target: 40_000 },
-    ])).goal).toMatchObject({ status: 'outside-horizon', month: null, timing: null });
+    ]))).toMatchObject({
+      goal: { status: 'projected', month: '2032-10', timing: 'end', laterBelowMonth: '2032-11' },
+      laterBelowTiming: 'start',
+    });
   });
 
   it('reports already reached and checks later closing balances against their own PMS targets', () => {
@@ -262,6 +266,130 @@ describe('PMS reserve milestones', () => {
     expect(() => getPmsReserveInsights(rows([{ opening: 0, closing: 0, target: -1 }]))).toThrow('cannot be negative');
     expect(() => getPmsReserveInsights(rows([{ opening: 0, closing: 0, target: 0.5 }]))).toThrow('supported monetary range');
     expect(() => getPmsReserveInsights(rows([{ opening: 0, closing: 0, target: Infinity }]))).toThrow('supported monetary range');
+  });
+});
+
+describe('reserve milestones for every financial target', () => {
+  function rows(key: ReserveTargetKey, values: { opening: number; closing: number; target: number | null }[]): ProjectionMonth[] {
+    return projectReserve(fixture()).slice(0, values.length).map((row, index) => ({
+      ...row,
+      openingCents: values[index].opening,
+      closingCents: values[index].closing,
+      indicators: {
+        pms: { targetCents: null, progressPercent: null },
+        pmr: { targetCents: null, progressPercent: null },
+        pi: { targetCents: null, progressPercent: null },
+        pnif: { targetCents: null, progressPercent: null },
+        [key]: { targetCents: values[index].target, progressPercent: null },
+      },
+    }));
+  }
+
+  it.each(['pms', 'pmr', 'pi', 'pnif'] as const)('uses %s targets independently and keeps their current progress separate from the reach date', key => {
+    const projection = rows(key, [
+      { opening: 5_000, closing: 10_000, target: 20_000 },
+      { opening: 10_000, closing: 15_000, target: 15_000 },
+      { opening: 15_000, closing: 20_000, target: 10_000 },
+    ]);
+    const before = structuredClone(projection);
+    expect(getReserveTargetInsights(projection, key)).toMatchObject({
+      openingCents: 5_000, closingCents: 20_000, growthCents: 15_000,
+      targetStatus: 'available', hasUnavailableTargets: false,
+      goal: {
+        amountCents: 20_000, progressPercent: 25, remainingCents: 15_000,
+        status: 'projected', month: '2032-11', timing: 'end', laterBelowMonth: null,
+      },
+    });
+    expect(projection).toEqual(before);
+  });
+
+  it.each(['pms', 'pmr', 'pi', 'pnif'] as const)('keeps a %s closing achievement when the next month’s target rises above the reserve', key => {
+    expect(getReserveTargetInsights(rows(key, [
+      { opening: 0, closing: 10_000, target: 10_000 },
+      { opening: 10_000, closing: 11_000, target: 20_000 },
+    ]), key)).toMatchObject({
+      goal: { status: 'projected', month: '2032-10', timing: 'end', laterBelowMonth: '2032-11' },
+      laterBelowTiming: 'start',
+    });
+  });
+
+  it('does not mark an opening before a closing achievement as a later shortfall', () => {
+    expect(getReserveTargetInsights(rows('pmr', [
+      { opening: 0, closing: 10_000, target: 10_000 },
+      { opening: 10_000, closing: 15_000, target: 10_000 },
+    ]), 'pmr')).toMatchObject({
+      goal: { status: 'projected', month: '2032-10', timing: 'end', laterBelowMonth: null },
+      laterBelowTiming: null,
+    });
+  });
+
+  it('checks a higher future target against that month’s opening before a recovery at closing', () => {
+    expect(getReserveTargetInsights(rows('pmr', [
+      { opening: 20_000, closing: 25_000, target: 20_000 },
+      { opening: 25_000, closing: 45_000, target: 40_000 },
+      { opening: 45_000, closing: 50_000, target: 40_000 },
+    ]), 'pmr')).toMatchObject({
+      goal: { status: 'already-reached', month: '2032-10', timing: 'start', laterBelowMonth: '2032-11' },
+      laterBelowTiming: 'start',
+    });
+    expect(getReserveTargetInsights(rows('pnif', [
+      { opening: 20_000, closing: 15_000, target: 20_000 },
+      { opening: 15_000, closing: 25_000, target: 20_000 },
+    ]), 'pnif')).toMatchObject({ goal: { laterBelowMonth: '2032-10' }, laterBelowTiming: 'end' });
+  });
+
+  it('reports a final closing achievement as end of month without extrapolating missing months', () => {
+    const projection = rows('pi', [
+      { opening: 0, closing: 5_000, target: 20_000 },
+      { opening: 5_000, closing: 10_000, target: 20_000 },
+    ]);
+    expect(getReserveTargetInsights(projection, 'pi').goal).toMatchObject({ status: 'outside-horizon', month: null, timing: null });
+    projection[1].indicators.pi.targetCents = 10_000;
+    expect(getReserveTargetInsights(projection, 'pi').goal).toMatchObject({ status: 'projected', month: '2032-11', timing: 'end' });
+    projection[1].indicators.pi.targetCents = null;
+    expect(getReserveTargetInsights(projection, 'pi')).toMatchObject({
+      hasUnavailableTargets: true, goal: { status: 'outside-horizon', month: null, timing: null },
+    });
+  });
+
+  it('distinguishes missing target assumptions from zero spending and can still reach a later positive target', () => {
+    const projection = rows('pnif', [
+      { opening: 0, closing: 10_000, target: null },
+      { opening: 10_000, closing: 15_000, target: 10_000 },
+    ]);
+    expect(getReserveTargetInsights(projection, 'pnif')).toMatchObject({
+      targetStatus: 'unavailable', hasUnavailableTargets: true,
+      goal: { amountCents: 0, progressPercent: null, remainingCents: 0, status: 'projected', month: '2032-11', timing: 'start' },
+    });
+    projection[0].indicators.pnif.targetCents = 0;
+    expect(getReserveTargetInsights(projection, 'pnif')).toMatchObject({ targetStatus: 'no-spending', hasUnavailableTargets: false, goal: { status: 'projected' } });
+    projection[1].indicators.pnif.targetCents = 0;
+    expect(getReserveTargetInsights(projection, 'pnif').goal).toMatchObject({ status: 'unset', month: null, timing: null });
+  });
+
+  it('preserves debt, uncapped initial progress, and the same shortage timing for every target', () => {
+    const projection = rows('pmr', [{ opening: -5_000, closing: 5_000, target: 20_000 }]);
+    expect(getReserveTargetInsights(projection, 'pmr')).toMatchObject({
+      goal: { progressPercent: -25, remainingCents: 25_000 },
+      firstShortfall: { month: '2032-10', amountCents: 5_000, timing: 'start' },
+    });
+    projection[0].openingCents = 40_000;
+    projection[0].closingCents = -5_000;
+    expect(getReserveTargetInsights(projection, 'pmr')).toMatchObject({
+      goal: { progressPercent: 200, remainingCents: 0, laterBelowMonth: '2032-10' },
+      laterBelowTiming: 'end', firstShortfall: { month: '2032-10', amountCents: 5_000, timing: 'end' },
+    });
+  });
+
+  it('retains the PMS API and rejects invalid amounts for any selected target', () => {
+    const projection = rows('pms', [{ opening: 5_000, closing: 10_000, target: 20_000 }]);
+    expect(getPmsReserveInsights(projection)).toEqual(getReserveTargetInsights(projection, 'pms'));
+    for (const key of ['pms', 'pmr', 'pi', 'pnif'] as const) {
+      expect(getReserveTargetInsights([], key)).toMatchObject({ targetStatus: 'unavailable', hasUnavailableTargets: false, goal: { status: 'unset' } });
+      expect(() => getReserveTargetInsights(rows(key, [{ opening: 0, closing: 0, target: -1 }]), key)).toThrow('cannot be negative');
+      expect(() => getReserveTargetInsights(rows(key, [{ opening: 0, closing: 0, target: 0.5 }]), key)).toThrow('supported monetary range');
+      expect(() => getReserveTargetInsights(rows(key, [{ opening: 0, closing: 0, target: Infinity }]), key)).toThrow('supported monetary range');
+    }
   });
 });
 

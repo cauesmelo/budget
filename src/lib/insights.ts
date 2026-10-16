@@ -1,5 +1,6 @@
 import { getTransactionScope, isReportableTransaction, isValidMonth, projectReserve, summarizeMonth } from './finance';
 import type { FinanceData, ProjectionMonth } from './types';
+import type { ReserveTargetKey } from './reserveChart';
 import { getTransactionReportingMonth } from './transactionMonth';
 
 export interface ReserveInsights {
@@ -18,11 +19,13 @@ export interface ReserveInsights {
   firstShortfall: { month: string; amountCents: number; timing: 'start' | 'end' } | null;
 }
 
-export interface PmsReserveInsights extends ReserveInsights {
+export interface ReserveTargetInsights extends ReserveInsights {
   targetStatus: 'available' | 'no-spending' | 'unavailable';
   hasUnavailableTargets: boolean;
   laterBelowTiming: 'start' | 'end' | null;
 }
+
+export type PmsReserveInsights = ReserveTargetInsights;
 
 export interface BudgetComparison {
   month: string;
@@ -90,13 +93,13 @@ export function getReserveInsights(rows: ProjectionMonth[], goalCents: number): 
   return { openingCents, closingCents, growthCents: cents(closingCents - openingCents), goal, firstShortfall };
 }
 
-/** PMS follows each month's calculated spending target, rather than freezing the first target. */
-export function getPmsReserveInsights(rows: ProjectionMonth[]): PmsReserveInsights {
+/** Check each opening and closing balance chronologically against that month's calculated target. */
+export function getReserveTargetInsights(rows: ProjectionMonth[], key: ReserveTargetKey): ReserveTargetInsights {
   const targets = rows.map(row => {
-    const targetCents = row.indicators.pms.targetCents;
+    const targetCents = row.indicators[key].targetCents;
     if (targetCents !== null) {
       cents(targetCents);
-      if (targetCents < 0) throw new Error('The PMS target cannot be negative.');
+      if (targetCents < 0) throw new Error(`The ${key.toUpperCase()} target cannot be negative.`);
     }
     return targetCents;
   });
@@ -107,33 +110,32 @@ export function getPmsReserveInsights(rows: ProjectionMonth[]): PmsReserveInsigh
   goal.month = null;
   goal.timing = null;
   goal.laterBelowMonth = null;
-  let laterBelowTiming: PmsReserveInsights['laterBelowTiming'] = null;
+  let laterBelowTiming: ReserveTargetInsights['laterBelowTiming'] = null;
 
-  const reachIndex = rows.findIndex((row, index) => {
+  let reachIndex = -1;
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
     const target = targets[index];
-    return target !== null && target > 0 && row.openingCents >= target;
-  });
+    if (target === null || target <= 0) continue;
+    if (row.openingCents >= target || row.closingCents >= target) {
+      reachIndex = index;
+      goal.month = row.month;
+      goal.timing = row.openingCents >= target ? 'start' : 'end';
+      break;
+    }
+  }
   if (reachIndex >= 0) {
-    goal.status = reachIndex === 0 ? 'already-reached' : 'projected';
-    goal.month = rows[reachIndex].month;
-    goal.timing = 'start';
+    goal.status = reachIndex === 0 && goal.timing === 'start' ? 'already-reached' : 'projected';
     for (let index = reachIndex; index < rows.length; index++) {
       const row = rows[index];
       const target = targets[index];
       if (target === null || target <= 0) continue;
-      if (row.openingCents < target || row.closingCents < target) {
+      const belowAtOpening = index > reachIndex && row.openingCents < target;
+      if (belowAtOpening || row.closingCents < target) {
         goal.laterBelowMonth = row.month;
-        laterBelowTiming = row.openingCents < target ? 'start' : 'end';
+        laterBelowTiming = belowAtOpening ? 'start' : 'end';
         break;
       }
-    }
-  } else {
-    const last = rows.at(-1);
-    const finalTargetCents = targets.at(-1);
-    if (last && finalTargetCents !== undefined && finalTargetCents !== null && finalTargetCents > 0 && last.closingCents >= finalTargetCents) {
-      goal.status = 'projected';
-      goal.month = last.month;
-      goal.timing = 'end';
     }
   }
 
@@ -143,6 +145,10 @@ export function getPmsReserveInsights(rows: ProjectionMonth[]): PmsReserveInsigh
     hasUnavailableTargets: targets.some(target => target === null),
     laterBelowTiming,
   };
+}
+
+export function getPmsReserveInsights(rows: ProjectionMonth[]): PmsReserveInsights {
+  return getReserveTargetInsights(rows, 'pms');
 }
 
 /** Missing records remain explicit evidence flags; recorded spending is not a completed-month claim. */

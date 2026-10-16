@@ -10,6 +10,7 @@ export const reserveTargetDefinitions: readonly { key: ReserveTargetKey; label: 
 ];
 
 export type ReserveChartPoint = Pick<ProjectionMonth, 'month' | 'openingCents'> & Record<ReserveTargetKey, number | null>;
+export type ReserveProgressPoint = Pick<ProjectionMonth, 'month'> & Record<ReserveTargetKey, number | null>;
 
 /** Keep every series in cents and use the same monthly targets as the indicator cards. */
 export function buildReserveChartData(rows: readonly ProjectionMonth[]): ReserveChartPoint[] {
@@ -25,6 +26,25 @@ export function buildReserveChartData(rows: readonly ProjectionMonth[]): Reserve
       pmr: target('pmr'),
       pi: target('pi'),
       pnif: target('pnif'),
+    };
+  });
+}
+
+/** Compare goals on a shared percentage scale without hiding debt or progress beyond a target. */
+export function buildReserveProgressData(rows: readonly ProjectionMonth[]): ReserveProgressPoint[] {
+  return rows.map(row => {
+    const progress = (key: ReserveTargetKey): number | null => {
+      const targetCents = row.indicators[key].targetCents;
+      return targetCents !== null && Number.isSafeInteger(targetCents) && targetCents > 0 && Number.isSafeInteger(row.openingCents)
+        ? row.openingCents / targetCents * 100
+        : null;
+    };
+    return {
+      month: row.month,
+      pms: progress('pms'),
+      pmr: progress('pmr'),
+      pi: progress('pi'),
+      pnif: progress('pnif'),
     };
   });
 }
