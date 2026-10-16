@@ -1,5 +1,5 @@
 import type { FinanceData, ImportResult, InstallmentSchedule, MonthSummary, PlanItem, PlanningIndicator, ProjectionMonth, Transaction, TransactionScope } from './types';
-import { categoryNameKey, mergeCategoryCatalog, normalizeCategoryData } from './categories';
+import { categoryNameKey, categoryWorkKeys, mergeCategoryCatalog, normalizeCategoryData, rebaseCategoryAssignments } from './categories';
 import { canonicalAccountIdentity } from './identity';
 import { formatMoneyAmount } from './numbers';
 import { getTransactionReportingMonth } from './transactionMonth';
@@ -121,19 +121,10 @@ function decimalToCents(text: string, negative: boolean): number {
   return result;
 }
 
-function workCategoryKeys(data: FinanceData): Set<string> {
-  const keys = new Set(data.work?.expenseCategories.map(categoryNameKey) ?? []);
-  for (const category of data.categories) {
-    const labels = [category.name, ...(category.aliases ?? [])].map(categoryNameKey);
-    if (labels.some(label => keys.has(label))) for (const label of labels) keys.add(label);
-  }
-  return keys;
-}
-
 /** Expense rules never classify salary or another income as a reimbursement. */
 export function getTransactionScope(data: FinanceData, transaction: Transaction): TransactionScope {
   if (transaction.scope !== undefined) return transaction.scope;
-  return transaction.kind === 'expense' && workCategoryKeys(data).has(categoryNameKey(transaction.category)) ? 'work' : 'personal';
+  return transaction.kind === 'expense' && categoryWorkKeys(data).has(categoryNameKey(transaction.category)) ? 'work' : 'personal';
 }
 
 export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
@@ -141,7 +132,7 @@ export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
   const monthlyIncomeCents = data.settings.monthlyIncomeCents;
   if (monthlyIncomeCents !== undefined && (!Number.isSafeInteger(monthlyIncomeCents) || monthlyIncomeCents < 0)) throw new Error('Invalid monthly income.');
   const transactions = data.transactions.filter(item => isReportableTransaction(data, item) && getTransactionReportingMonth(item) === month && !item.deletedAt && item.kind !== 'transfer');
-  const workCategories = workCategoryKeys(data);
+  const workCategories = categoryWorkKeys(data);
   let incomeCents = monthlyIncomeCents !== undefined && (!data.reporting || month >= data.reporting.startMonth) ? monthlyIncomeCents : 0;
   let expenseCents = 0;
   let workInCents = 0;
@@ -436,8 +427,8 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const categories = mergeCategoryCatalog(local.categories, remote.categories);
   // Resolve deletions while each device's own work rules can still preserve transaction scope.
-  local = normalizeCategoryData({ ...local, categories }, false);
-  remote = normalizeCategoryData({ ...remote, categories }, false);
+  local = rebaseCategoryAssignments(local, categories);
+  remote = rebaseCategoryAssignments(remote, categories);
   const sameEpoch = local.reporting?.resetId === remote.reporting?.resetId;
   const epochData = sameEpoch ? undefined : local.reporting?.resetId === reporting?.resetId ? local : remote;
   const localSettings = { ...local.settings, googleClientId: '' };

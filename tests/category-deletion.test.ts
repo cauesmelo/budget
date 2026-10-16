@@ -70,8 +70,8 @@ describe('permanent category deletion', () => {
     expect(allCategoryNames(next)).toEqual(['Health', 'Leisure']);
     expect(availableCategoryNames(next)).toEqual(['Health', 'Leisure']);
     expect(() => assertAvailableCategory(next, 'Dining')).toThrow('available category');
-    expect(() => addCategory(next, 'dining', LATER)).toThrow('deleted category');
-    expect(() => renameCategory(next, categoryId(next, 'Health'), 'Dining', LATER)).toThrow('deleted category');
+    expect(availableCategoryNames(addCategory(next, 'dining', LATER))).toContain('dining');
+    expect(availableCategoryNames(renameCategory(next, categoryId(next, 'Health'), 'Dining', LATER))).toContain('Dining');
     expect(() => renameCategory(next, categoryId(next, 'Dining'), 'Renamed', LATER)).toThrow('Category not found');
     expect(() => archiveCategory(next, categoryId(next, 'Dining'), LATER)).toThrow('Category not found');
     expect(() => restoreCategory(next, categoryId(next, 'Dining'), LATER)).toThrow('Category not found');
@@ -129,7 +129,9 @@ describe('permanent category deletion', () => {
     expect(normalized.transactions.every(item => item.category === 'Health')).toBe(true);
     expect(normalized.planItems.every(item => item.category === 'Health')).toBe(true);
     expect(normalizeCategoryData(normalized, false)).toEqual(normalized);
-    expect(() => addCategory(normalized, 'Meals', LATER)).toThrow('deleted category');
+    const reused = addCategory(normalized, 'Meals', LATER);
+    expect(availableCategoryNames(reused)).toContain('Meals');
+    expect(reused.transactions.every(item => item.category === 'Health')).toBe(true);
   });
 
   it('reconciles pending category choices through aliases and deletion redirects without adopting unknown labels', () => {

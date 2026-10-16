@@ -1,7 +1,7 @@
 import { createStore, get, set } from 'idb-keyval';
 import { addMonths, isValidDate, isValidMonth, projectReserve, reconcilePlanSegments, sanitizeFinanceData } from './finance';
 import { DATABASE_NAME, LEGACY_DATABASE_NAME } from './identity';
-import { categoryNameKey, normalizeCategoryData } from './categories';
+import { categoryNameKey, getCategoryNameGeneration, normalizeCategoryData } from './categories';
 import type { Category, FinanceData, ImportBatch, InstallmentSchedule, PlanItem, PlanOrder, PlanningConfiguration, Settings, ReportingConfiguration, Transaction, TransactionKind, TransactionScope, TransactionSource, WorkConfiguration } from './types';
 
 const DATA_KEY = 'finance-data-v1';
@@ -222,6 +222,26 @@ function category(value: unknown, path: string): Category {
     if (!Array.isArray(source.aliases) || source.aliases.length > 1_000) fail(`${path}.aliases`, 'must be a list of up to 1.000 previous names');
     aliases = source.aliases.map((entry, index) => string(entry, `${path}.aliases[${index}]`, false, 500));
   }
+  let mergedIds: string[] | undefined;
+  if (source.mergedIds !== undefined) {
+    if (!Array.isArray(source.mergedIds) || source.mergedIds.length > 12_000) fail(`${path}.mergedIds`, 'must be a list within the size limit');
+    mergedIds = source.mergedIds.map((entry, index) => string(entry, `${path}.mergedIds[${index}]`, false, 1_000));
+    if (new Set(mergedIds).size !== mergedIds.length) fail(`${path}.mergedIds`, 'contains duplicate identities');
+  }
+  let nameReclaims: Category['nameReclaims'];
+  if (source.nameReclaims !== undefined) {
+    if (!Array.isArray(source.nameReclaims) || source.nameReclaims.length > 1_000) fail(`${path}.nameReclaims`, 'must be a list within the size limit');
+    const names = new Set<string>();
+    nameReclaims = source.nameReclaims.map((entry, index) => {
+      const claim = object(entry, `${path}.nameReclaims[${index}]`);
+      const label = string(claim.name, `${path}.nameReclaims[${index}].name`, false, 500);
+      if (label !== label.normalize('NFC').trim().replace(/\s+/g, ' ')) fail(`${path}.nameReclaims`, 'contains a name with excess whitespace');
+      const key = categoryNameKey(label);
+      if (names.has(key)) fail(`${path}.nameReclaims`, 'contains duplicate names');
+      names.add(key);
+      return { name: label, fromCategoryId: string(claim.fromCategoryId, `${path}.nameReclaims[${index}].fromCategoryId`, false, 1_000) };
+    });
+  }
   return {
     id: string(source.id, `${path}.id`, false, 1_000),
     name,
@@ -229,28 +249,69 @@ function category(value: unknown, path: string): Category {
     ...(source.archivedAt !== undefined ? { archivedAt: timestamp(source.archivedAt, `${path}.archivedAt`) } : {}),
     ...(source.deletedAt !== undefined ? { deletedAt: timestamp(source.deletedAt, `${path}.deletedAt`) } : {}),
     ...(source.replacementCategory !== undefined ? { replacementCategory: string(source.replacementCategory, `${path}.replacementCategory`, false, 500) } : {}),
+    ...(source.replacementCategoryId !== undefined ? { replacementCategoryId: string(source.replacementCategoryId, `${path}.replacementCategoryId`, false, 1_000) } : {}),
     ...(aliases !== undefined ? { aliases } : {}),
+    ...(mergedIds !== undefined ? { mergedIds } : {}),
+    ...(nameReclaims !== undefined ? { nameReclaims } : {}),
   };
 }
 
-function validateCategoryReplacements(categories: Category[], labels: Map<string, string>): void {
-  const byId = new Map(categories.map(record => [record.id, record]));
+function validateCategoryCatalog(categories: Category[]): Map<string, Category> {
+  const byId = new Map<string, Category>();
+  const names = new Map<string, Category[]>();
+  const labels = (record: Category) => [record.name, ...(record.aliases ?? [])].map(categoryNameKey);
+  for (const record of categories) {
+    for (const id of [record.id, ...(record.mergedIds ?? [])]) {
+      if (byId.has(id)) fail('categories', 'contains duplicate identities');
+      byId.set(id, record);
+    }
+    for (const label of new Set(labels(record))) names.set(label, [...(names.get(label) ?? []), record]);
+  }
+  for (const record of categories) {
+    for (const claim of record.nameReclaims ?? []) {
+      const key = categoryNameKey(claim.name);
+      if (!labels(record).includes(key)) fail('categories', 'contains a name claim without a matching label');
+      const seen = new Set<string>([record.id]);
+      let current: Category | undefined = record;
+      let previousId: string | undefined = claim.fromCategoryId;
+      while (previousId !== undefined) {
+        current = byId.get(previousId);
+        if (!current || !current.deletedAt || !labels(current).includes(key)) fail('categories', 'references an invalid previous name owner');
+        if (seen.has(current.id)) fail('categories', 'contains a name ownership cycle');
+        seen.add(current.id);
+        previousId = current.nameReclaims?.find(entry => categoryNameKey(entry.name) === key)?.fromCategoryId;
+      }
+    }
+  }
+  const byName = new Map<string, Category>();
+  for (const [name, records] of names) {
+    const generations = records.map(record => getCategoryNameGeneration(record, name, categories));
+    if (new Set(generations).size !== records.length || records.filter(record => !record.deletedAt).length > 1) fail('categories', 'contains duplicate names');
+    const owner = records.find(record => !record.deletedAt) ?? records.find(record => !records.some(other => other.nameReclaims?.some(claim => categoryNameKey(claim.name) === name && byId.get(claim.fromCategoryId)?.id === record.id)))!;
+    byName.set(name, owner);
+  }
   const resolved = new Set<string>();
+  for (const record of categories) {
+    if (record.replacementCategoryId !== undefined && record.replacementCategory === undefined) fail('categories', 'contains a replacement identity without a name');
+    if (record.replacementCategory === undefined) continue;
+    if (!record.deletedAt) fail('categories', 'contains a replacement on a category that is not deleted');
+    if (record.replacementCategory !== record.replacementCategory.normalize('NFC').trim().replace(/\s+/g, ' ')) fail('categories', 'contains a replacement with excess whitespace');
+    const target = record.replacementCategoryId === undefined ? byName.get(categoryNameKey(record.replacementCategory)) : byId.get(record.replacementCategoryId);
+    if (!target || !labels(target).includes(categoryNameKey(record.replacementCategory))) fail('categories', 'references an unknown replacement category');
+    if (record.replacementCategoryId === undefined && (names.get(categoryNameKey(record.replacementCategory))?.length ?? 0) > 1) fail('categories', 'contains an ambiguous replacement category');
+  }
   for (const category of categories) {
     if (category.replacementCategory === undefined) continue;
-    if (!category.deletedAt) fail('categories', 'contains a replacement on a category that is not deleted');
-    if (category.replacementCategory !== category.replacementCategory.normalize('NFC').trim().replace(/\s+/g, ' ')) fail('categories', 'contains a replacement with excess whitespace');
     const chain = new Set<string>();
     let current: Category | undefined = category;
     while (current?.replacementCategory !== undefined && !resolved.has(current.id)) {
       if (chain.has(current.id)) fail('categories', 'contains a replacement cycle');
       chain.add(current.id);
-      const targetId = labels.get(categoryNameKey(current.replacementCategory));
-      if (targetId === undefined) fail('categories', 'references an unknown replacement category');
-      current = byId.get(targetId);
+      current = current.replacementCategoryId === undefined ? byName.get(categoryNameKey(current.replacementCategory)) : byId.get(current.replacementCategoryId);
     }
     for (const id of chain) resolved.add(id);
   }
+  return byName;
 }
 
 function settings(value: unknown): Settings {
@@ -326,16 +387,7 @@ export function validateBackup(payload: unknown): FinanceData {
   const source = object(data, 'file');
   if (source.version !== 1) throw new Error('Unsupported backup version. This app reads only version 1.');
   const categories = source.categories === undefined ? [] : array(source.categories, 'categories', category, 12_000);
-  const categoryLabels = new Map<string, string>();
-  for (const record of categories) {
-    for (const label of [record.name, ...(record.aliases ?? [])]) {
-      const key = categoryNameKey(label);
-      const otherId = categoryLabels.get(key);
-      if (otherId && otherId !== record.id) fail('categories', 'contains duplicate names');
-      categoryLabels.set(key, record.id);
-    }
-  }
-  validateCategoryReplacements(categories, categoryLabels);
+  validateCategoryCatalog(categories);
   const parsed: FinanceData = {
     version: 1,
     categories,

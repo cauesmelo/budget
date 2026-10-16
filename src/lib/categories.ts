@@ -33,37 +33,147 @@ function compareCategory(left: Category, right: Category): number {
   // A resolved concurrent deletion cycle must not regain its redirect on the next sync.
   if (left.deletedAt && right.deletedAt && (left.replacementCategory === undefined) !== (right.replacementCategory === undefined)) return left.replacementCategory === undefined ? 1 : -1;
   if (Boolean(left.archivedAt) !== Boolean(right.archivedAt)) return left.archivedAt ? 1 : -1;
-  return compareText(JSON.stringify([left.name, left.archivedAt ?? '', left.deletedAt ?? '', left.replacementCategory ?? '', left.id]), JSON.stringify([right.name, right.archivedAt ?? '', right.deletedAt ?? '', right.replacementCategory ?? '', right.id]));
+  const tieKey = (category: Category): string => JSON.stringify([
+    category.name, category.archivedAt ?? '', category.deletedAt ?? '', category.replacementCategory ?? '', category.id,
+    category.replacementCategoryId ?? '', [...(category.mergedIds ?? [])].sort(compareText),
+    [...(category.nameReclaims ?? [])].map(claim => [claim.name, claim.fromCategoryId]).sort((a, b) => compareText(JSON.stringify(a), JSON.stringify(b))),
+  ]);
+  return compareText(tieKey(left), tieKey(right));
 }
 
 function labels(category: Category): string[] {
   return [category.name, ...(category.aliases ?? [])];
 }
 
-/** Merges changes by ID and previous names, including identical additions on two devices. */
-export function mergeCategoryCatalog(local: Category[], remote: Category[]): Category[] {
-  const groups: Category[][] = [];
-  for (const record of [...local, ...remote]) {
-    const keys = new Set(labels(record).map(categoryNameKey));
-    const matching = groups.filter(group => group.some(item => item.id === record.id || labels(item).some(name => keys.has(categoryNameKey(name)))));
-    const group = [structuredClone(record), ...matching.flat()];
-    for (const previous of matching) groups.splice(groups.indexOf(previous), 1);
-    groups.push(group);
+function identities(category: Category): string[] {
+  return [category.id, ...(category.mergedIds ?? [])];
+}
+
+function identityLookup(catalog: Category[]): Map<string, Category> {
+  return new Map(catalog.flatMap(category => identities(category).map(id => [id, category] as const)));
+}
+
+function ownershipAncestry(catalog: Category[], canonicalIds = new Map<string, string>()): (id: string) => Set<string> {
+  const canonical = (id: string): string => canonicalIds.get(id) ?? id;
+  const parents = new Map<string, Set<string>>();
+  for (const category of catalog) {
+    const id = canonical(category.id);
+    const values = parents.get(id) ?? new Set<string>();
+    for (const claim of category.nameReclaims ?? []) values.add(canonical(claim.fromCategoryId));
+    parents.set(id, values);
   }
-  const catalog = groups.map(group => {
-    const winner = [...group].sort(compareCategory).at(-1)!;
-    const { aliases: _aliases, ...current } = winner;
-    const names = new Map<string, string>();
-    for (const name of group.flatMap(labels).sort(compareText)) {
-      if (categoryNameKey(name) !== categoryNameKey(winner.name)) names.set(categoryNameKey(name), name);
+  const ancestors = new Map<string, Set<string>>();
+  const visit = (id: string, seen = new Set<string>()): Set<string> => {
+    id = canonical(id);
+    const known = ancestors.get(id);
+    if (known) return known;
+    const result = new Set<string>();
+    if (seen.has(id)) return result;
+    const visited = new Set([...seen, id]);
+    for (const previous of parents.get(id) ?? []) {
+      if (previous === id) continue;
+      result.add(previous);
+      for (const ancestor of visit(previous, visited)) if (ancestor !== id) result.add(ancestor);
     }
-    return {
-      ...current,
-      id: group.map(record => record.id).sort(compareText)[0],
-      ...(names.size ? { aliases: [...names.values()].sort(compareText) } : {}),
-    };
-  }).sort((left, right) => compareText(left.id, right.id));
+    ancestors.set(id, result);
+    return result;
+  };
+  return visit;
+}
+
+function nameGeneration(category: Category, name: string, byId: Map<string, Category>, ancestry: (id: string) => Set<string>): string {
+  if (!category.nameReclaims?.length) return '';
+  const key = categoryNameKey(name);
+  const direct = category.nameReclaims.find(claim => categoryNameKey(claim.name) === key);
+  if (direct) return byId.get(direct.fromCategoryId)?.id ?? direct.fromCategoryId;
+  const owners = [...ancestry(category.id)].filter(id => !ancestry(id).has(category.id) && byId.get(id) && labels(byId.get(id)!).some(label => categoryNameKey(label) === key));
+  owners.sort((a, b) => ancestry(a).size - ancestry(b).size || compareText(a, b));
+  return owners.at(-1) ?? '';
+}
+
+/** A reclaimed label belongs to a new generation without reviving its previous identity. */
+export function getCategoryNameGeneration(category: Category, name: string, catalog: Category[]): string {
+  return nameGeneration(category, name, identityLookup(catalog), ownershipAncestry(catalog));
+}
+
+function combineCategoryRecords(group: Category[], canonicalIds: Map<string, string>, catalog: Category[]): Category {
+  const winner = [...group].sort(compareCategory).at(-1)!;
+  const { aliases: _aliases, mergedIds: _mergedIds, nameReclaims: _nameReclaims, ...current } = winner;
+  const ids = [...new Set(group.flatMap(identities))].sort(compareText);
+  const names = new Map<string, string>();
+  for (const name of group.flatMap(labels).sort(compareText)) {
+    if (categoryNameKey(name) !== categoryNameKey(winner.name)) names.set(categoryNameKey(name), name);
+  }
+  const claims = new Map<string, { name: string; fromCategoryId: string }>();
+  const ancestry = ownershipAncestry(catalog, canonicalIds);
+  const claimRecords = group.flatMap(record => record.nameReclaims ?? []).map(claim => ({ ...claim, fromCategoryId: canonicalIds.get(claim.fromCategoryId) ?? claim.fromCategoryId }));
+  claimRecords.sort((a, b) => ancestry(a.fromCategoryId).size - ancestry(b.fromCategoryId).size || compareText(a.fromCategoryId, b.fromCategoryId) || compareText(a.name, b.name));
+  for (const claim of claimRecords) {
+    claims.set(categoryNameKey(claim.name), { ...claim, fromCategoryId: canonicalIds.get(claim.fromCategoryId) ?? claim.fromCategoryId });
+  }
+  return {
+    ...current,
+    id: ids[0],
+    ...(current.replacementCategoryId !== undefined ? { replacementCategoryId: canonicalIds.get(current.replacementCategoryId) ?? current.replacementCategoryId } : {}),
+    ...(ids.length > 1 ? { mergedIds: ids.slice(1) } : {}),
+    ...(names.size ? { aliases: [...names.values()].sort(compareText) } : {}),
+    ...(claims.size ? { nameReclaims: [...claims.values()].sort((left, right) => compareText(categoryNameKey(left.name), categoryNameKey(right.name))) } : {}),
+  };
+}
+
+/** Merges matching identities and names while keeping explicitly reused names independent. */
+export function mergeCategoryCatalog(local: Category[], remote: Category[]): Category[] {
+  let groups = [...local, ...remote].map(record => [structuredClone(record)]);
+  const joinGroups = (keyFor: (category: Category) => string[], canJoin: (left: Category[], right: Category[]) => boolean = () => true): boolean => {
+    const parent = groups.map((_, index) => index);
+    const members = groups.map(group => [...group]);
+    const root = (index: number): number => parent[index] === index ? index : parent[index] = root(parent[index]);
+    const owners = new Map<string, number[]>();
+    for (const [index, group] of groups.entries()) for (const category of group) for (const key of keyFor(category)) {
+      const previous = owners.get(key) ?? [];
+      for (const owner of previous) {
+        const currentRoot = root(index);
+        const ownerRoot = root(owner);
+        if (currentRoot === ownerRoot || !canJoin(members[currentRoot], members[ownerRoot])) continue;
+        parent[currentRoot] = ownerRoot;
+        members[ownerRoot].push(...members[currentRoot]);
+      }
+      if (!previous.some(owner => root(owner) === root(index))) previous.push(index);
+      owners.set(key, previous);
+    }
+    const joined = new Map<number, Category[]>();
+    groups.forEach((group, index) => joined.set(root(index), [...(joined.get(root(index)) ?? []), ...group]));
+    const changed = joined.size !== groups.length;
+    groups = [...joined.values()];
+    return changed;
+  };
+  joinGroups(category => identities(category));
+  let canonicalIds = new Map<string, string>();
+  for (;;) {
+    canonicalIds = new Map(groups.flatMap(group => {
+      const ids = [...new Set(group.flatMap(identities))].sort(compareText);
+      return ids.map(id => [id, ids[0]] as const);
+    }));
+    const records = groups.flat();
+    groups = groups.map(group => [combineCategoryRecords(group, canonicalIds, records)]);
+    const byId = identityLookup(groups.flat());
+    const ancestry = ownershipAncestry(groups.flat());
+    // Resolve older identities first; a stale alias cannot bridge them into a newer owner.
+    groups.sort(([left], [right]) => ancestry(left.id).size - ancestry(right.id).size || compareText(left.id, right.id));
+    if (!joinGroups(category => labels(category).map(name => {
+      return JSON.stringify([categoryNameKey(name), nameGeneration(category, name, byId, ancestry)]);
+    }), (left, right) => left.every(a => right.every(b => !ancestry(a.id).has(b.id) && !ancestry(b.id).has(a.id))))) break;
+  }
+  const records = groups.flat();
+  const catalog = groups.map(group => combineCategoryRecords(group, canonicalIds, records)).sort((left, right) => compareText(left.id, right.id));
   const byName = lookup(catalog);
+  const byId = identityLookup(catalog);
+  for (const category of catalog) {
+    if (category.replacementCategory !== undefined && category.replacementCategoryId === undefined) {
+      const replacement = byName.get(categoryNameKey(category.replacementCategory));
+      if (replacement) category.replacementCategoryId = replacement.id;
+    }
+  }
   const cycles = new Set<string>();
   for (const category of catalog) {
     const chain: string[] = [];
@@ -72,18 +182,30 @@ export function mergeCategoryCatalog(local: Category[], remote: Category[]): Cat
       const index = chain.indexOf(current.id);
       if (index >= 0) { for (const id of chain.slice(index)) cycles.add(id); break; }
       chain.push(current.id);
-      current = byName.get(categoryNameKey(current.replacementCategory));
+      current = current.replacementCategoryId === undefined ? byName.get(categoryNameKey(current.replacementCategory)) : byId.get(current.replacementCategoryId);
     }
   }
   // Concurrent deletion of each other's replacement has no live destination.
-  // Keep every financial record and return those assignments to the review queue.
-  for (const category of catalog) if (cycles.has(category.id)) delete category.replacementCategory;
+  for (const category of catalog) if (cycles.has(category.id)) {
+    delete category.replacementCategory;
+    delete category.replacementCategoryId;
+  }
   return catalog;
 }
 
 function lookup(catalog: Category[]): Map<string, Category> {
   const result = new Map<string, Category>();
-  for (const category of catalog) for (const name of labels(category)) result.set(categoryNameKey(name), category);
+  const byId = identityLookup(catalog);
+  const ancestry = ownershipAncestry(catalog);
+  const depth = (category: Category, key: string): number => {
+    const generation = nameGeneration(category, key, byId, ancestry);
+    return generation ? 1 + ancestry(generation).size : 0;
+  };
+  for (const category of catalog) for (const name of labels(category)) {
+    const key = categoryNameKey(name);
+    const previous = result.get(key);
+    if (!previous || depth(category, key) > depth(previous, key) || (depth(category, key) === depth(previous, key) && compareCategory(category, previous) > 0)) result.set(key, category);
+  }
   return result;
 }
 
@@ -95,7 +217,7 @@ function latestTimestamp(...values: (string | undefined)[]): string {
   return values.filter((value): value is string => value !== undefined).sort((left, right) => Date.parse(left) - Date.parse(right) || compareText(left, right)).at(-1)!;
 }
 
-function categoryResolution(category: Category, byName: Map<string, Category>): { name: string; deletedAt?: string } {
+function categoryResolution(category: Category, byName: Map<string, Category>, byId: Map<string, Category>): { name: string; deletedAt?: string } {
   const seen = new Set<string>();
   let current: Category | undefined = category;
   let deletedAt: string | undefined;
@@ -103,7 +225,7 @@ function categoryResolution(category: Category, byName: Map<string, Category>): 
     deletedAt = latestTimestamp(deletedAt, current.deletedAt, current.updatedAt);
     if (seen.has(current.id)) return { name: '', deletedAt };
     seen.add(current.id);
-    current = current.replacementCategory === undefined ? undefined : byName.get(categoryNameKey(current.replacementCategory));
+    current = current.replacementCategory === undefined ? undefined : current.replacementCategoryId === undefined ? byName.get(categoryNameKey(current.replacementCategory)) : byId.get(current.replacementCategoryId);
   }
   return { name: current?.name ?? '', ...(deletedAt !== undefined ? { deletedAt } : {}) };
 }
@@ -113,14 +235,16 @@ export function resolveCategoryName(data: Pick<FinanceData, 'categories'>, name:
   if (!name.trim()) return '';
   const byName = lookup(data.categories);
   const category = byName.get(categoryNameKey(name));
-  return category ? categoryResolution(category, byName).name : name;
+  return category ? categoryResolution(category, byName, identityLookup(data.categories)).name : name;
 }
 
-function workCategoryKeys(data: FinanceData): Set<string> {
+export function categoryWorkKeys(data: FinanceData): Set<string> {
   const keys = new Set(data.work?.expenseCategories.map(categoryNameKey) ?? []);
+  const byName = lookup(data.categories);
+  const owners = new Set([...keys].map(key => byName.get(key)?.id));
   for (const category of data.categories) {
-    const names = labels(category).map(categoryNameKey);
-    if (names.some(name => keys.has(name))) for (const name of names) keys.add(name);
+    if (!owners.has(category.id)) continue;
+    for (const name of labels(category).map(categoryNameKey)) if (byName.get(name)?.id === category.id) keys.add(name);
   }
   return keys;
 }
@@ -130,7 +254,7 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
   const next = structuredClone(data);
   next.categories = mergeCategoryCatalog(next.categories ?? [], []);
   const byName = lookup(next.categories);
-  const previousWorkKeys = workCategoryKeys(next);
+  const previousWorkKeys = categoryWorkKeys(next);
   const previousScopes = next.transactions.map(item => item.scope ?? (item.kind === 'expense' && previousWorkKeys.has(categoryNameKey(item.category)) ? 'work' : 'personal'));
   for (const name of referencedNames(next).sort(compareText)) {
     const key = categoryNameKey(name);
@@ -141,10 +265,11 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
     byName.set(key, category);
   }
   next.categories.sort((left, right) => compareText(left.id, right.id));
+  const byId = identityLookup(next.categories);
   let deletionClock: string | undefined;
   for (const item of [...next.transactions, ...next.planItems]) {
     if (!item.category.trim()) { item.category = ''; continue; }
-    const resolved = categoryResolution(byName.get(categoryNameKey(item.category))!, byName);
+    const resolved = categoryResolution(byName.get(categoryNameKey(item.category))!, byName, byId);
     if (resolved.name !== item.category && resolved.deletedAt !== undefined) {
       item.updatedAt = latestTimestamp(item.updatedAt, resolved.deletedAt);
       deletionClock = latestTimestamp(deletionClock, resolved.deletedAt);
@@ -156,7 +281,7 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
     let workClock: string | undefined;
     for (const name of next.work.expenseCategories) {
       const category = byName.get(categoryNameKey(name));
-      const resolved = category ? categoryResolution(category, byName) : { name };
+      const resolved = category ? categoryResolution(category, byName, byId) : { name };
       if (resolved.name !== name && category) workClock = latestTimestamp(workClock, resolved.deletedAt, category.updatedAt);
       if (resolved.name) names.set(categoryNameKey(resolved.name), resolved.name);
     }
@@ -167,7 +292,7 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
       deletionClock = latestTimestamp(deletionClock, workClock);
     }
   }
-  const currentWorkKeys = workCategoryKeys(next);
+  const currentWorkKeys = categoryWorkKeys(next);
   for (const [index, item] of next.transactions.entries()) {
     if (item.scope !== undefined) continue;
     const scope = item.kind === 'expense' && currentWorkKeys.has(categoryNameKey(item.category)) ? 'work' : 'personal';
@@ -178,6 +303,57 @@ export function normalizeCategoryData(data: FinanceData, adoptUnknown = true, im
   }
   if (deletionClock !== undefined) next.updatedAt = latestTimestamp(next.updatedAt, deletionClock);
   return next;
+}
+
+/** Keeps each device's assignments attached to their original identities before names are reconciled. */
+export function rebaseCategoryAssignments(data: FinanceData, catalog: Category[]): FinanceData {
+  const original = normalizeCategoryData(data);
+  const next = structuredClone(original);
+  const ownNames = lookup(original.categories);
+  const categories = mergeCategoryCatalog(catalog, []);
+  const byName = lookup(categories);
+  const byId = identityLookup(categories);
+  const originalWorkKeys = categoryWorkKeys(original);
+  const scopes = original.transactions.map(item => item.scope ?? (item.kind === 'expense' && originalWorkKeys.has(categoryNameKey(item.category)) ? 'work' : 'personal'));
+  const resolve = (name: string): { name: string; deletedAt?: string } => {
+    const source = ownNames.get(categoryNameKey(name));
+    const target = source && identities(source).map(id => byId.get(id)).find(Boolean);
+    return target ? categoryResolution(target, byName, byId) : { name };
+  };
+  let deletionClock: string | undefined;
+  for (const item of [...next.transactions, ...next.planItems]) {
+    const resolved = resolve(item.category);
+    if (resolved.name !== item.category && resolved.deletedAt !== undefined) {
+      item.updatedAt = latestTimestamp(item.updatedAt, resolved.deletedAt);
+      deletionClock = latestTimestamp(deletionClock, resolved.deletedAt);
+    }
+    item.category = resolved.name;
+  }
+  if (next.work) {
+    const names = new Map<string, string>();
+    let workClock: string | undefined;
+    for (const name of next.work.expenseCategories) {
+      const resolved = resolve(name);
+      if (resolved.name !== name) workClock = latestTimestamp(workClock, resolved.deletedAt);
+      if (resolved.name) names.set(categoryNameKey(resolved.name), resolved.name);
+    }
+    if (JSON.stringify(next.work.expenseCategories) !== JSON.stringify([...names.values()])) {
+      next.work.expenseCategories = [...names.values()];
+      next.work.updatedAt = latestTimestamp(next.work.updatedAt, workClock);
+      deletionClock = latestTimestamp(deletionClock, workClock);
+    }
+  }
+  next.categories = categories;
+  const nextWorkKeys = categoryWorkKeys(next);
+  for (const [index, item] of next.transactions.entries()) {
+    const scope = item.scope ?? (item.kind === 'expense' && nextWorkKeys.has(categoryNameKey(item.category)) ? 'work' : 'personal');
+    if (item.scope === undefined && scope !== scopes[index]) {
+      item.scope = scopes[index];
+      item.updatedAt = latestTimestamp(item.updatedAt, deletionClock);
+    }
+  }
+  if (deletionClock !== undefined) next.updatedAt = latestTimestamp(next.updatedAt, deletionClock);
+  return normalizeCategoryData(next, false);
 }
 
 export function listCategories(data: FinanceData): Category[] {
@@ -197,8 +373,13 @@ function editTime(now: Date): string {
 }
 
 function assertUnique(catalog: Category[], name: string, exceptId?: string): void {
-  const existing = catalog.find(category => category.id !== exceptId && labels(category).some(label => categoryNameKey(label) === categoryNameKey(name)));
-  if (existing) throw new Error(existing.deletedAt ? 'A deleted category already used this name. Choose a different name.' : existing.archivedAt ? 'This category already exists and is archived. Restore it to use it again.' : 'A category already exists with this name or a previous name.');
+  const existing = catalog.find(category => !category.deletedAt && category.id !== exceptId && labels(category).some(label => categoryNameKey(label) === categoryNameKey(name)));
+  if (existing) throw new Error(existing.archivedAt ? 'This category already exists and is archived. Restore it to use it again.' : 'A category already exists with this name or a previous name.');
+}
+
+function reclaimName(catalog: Category[], name: string): { name: string; fromCategoryId: string } | undefined {
+  const previous = lookup(catalog).get(categoryNameKey(name));
+  return previous?.deletedAt ? { name, fromCategoryId: previous.id } : undefined;
 }
 
 export function addCategory(data: FinanceData, name: string, now = new Date()): FinanceData {
@@ -206,7 +387,9 @@ export function addCategory(data: FinanceData, name: string, now = new Date()): 
   const cleaned = cleanName(name);
   assertUnique(next.categories, cleaned);
   const updatedAt = editTime(now);
-  next.categories.push({ id: categoryId(cleaned), name: cleaned, updatedAt });
+  const claim = reclaimName(next.categories, cleaned);
+  next.categories.push({ id: claim ? `category-${crypto.randomUUID()}` : categoryId(cleaned), name: cleaned, updatedAt, ...(claim ? { nameReclaims: [claim] } : {}) });
+  next.categories.sort((left, right) => compareText(left.id, right.id));
   next.updatedAt = updatedAt;
   return next;
 }
@@ -219,6 +402,8 @@ export function renameCategory(data: FinanceData, id: string, newName: string, n
   assertUnique(next.categories, cleaned, id);
   if (category.name === cleaned) return next;
   const updatedAt = editTime(now);
+  const claim = reclaimName(next.categories, cleaned);
+  if (claim) category.nameReclaims = [...(category.nameReclaims ?? []).filter(item => categoryNameKey(item.name) !== categoryNameKey(cleaned)), claim];
   category.aliases = [...new Set([...(category.aliases ?? []), category.name])].filter(name => categoryNameKey(name) !== categoryNameKey(cleaned));
   category.name = cleaned;
   category.updatedAt = updatedAt;
@@ -278,7 +463,10 @@ export function deleteCategory(data: FinanceData, id: string, replacementName?: 
   if (categoryUsage(next, id).total && !replacement) throw new Error('Select a replacement category before deleting a category assigned to items.');
   const updatedAt = editTime(now);
   category.deletedAt = category.updatedAt = updatedAt;
-  if (replacement) category.replacementCategory = replacement.name;
+  if (replacement) {
+    category.replacementCategory = replacement.name;
+    category.replacementCategoryId = replacement.id;
+  }
   const normalized = normalizeCategoryData(next, false);
   normalized.updatedAt = latestTimestamp(normalized.updatedAt, updatedAt);
   return normalized;

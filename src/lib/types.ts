@@ -85,6 +85,12 @@ export interface Category {
   deletedAt?: string;
   /** Replacement category name; preserved aliases keep this link valid after a rename. */
   replacementCategory?: string;
+  /** Stable redirect identity when a deleted category's previous name is reused. */
+  replacementCategoryId?: string;
+  /** Historical identities coalesced by synchronization. */
+  mergedIds?: string[];
+  /** Explicit ownership of a previous category's deleted name. */
+  nameReclaims?: { name: string; fromCategoryId: string }[];
   aliases?: string[];
 }
 export interface ReportingConfiguration {
