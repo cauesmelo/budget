@@ -1,0 +1,10 @@
+.income-settings{grid-column:1/-1}
+.income-settings .panel-header{margin-bottom:20px}
+.income-settings-form{display:flex;align-items:flex-end;gap:12px;max-width:590px}
+.income-settings-form .field{flex:1;min-width:0;margin:0}
+.income-settings-form input{min-width:0;width:100%}
+.income-settings-form .button{flex-shrink:0;min-height:42px}
+.income-settings .income-settings-help{margin-top:12px;max-width:700px}
+.income-settings .alert{margin:16px 0 0;overflow-wrap:anywhere}
+.income-settings .alert svg{flex-shrink:0}
+@media(max-width:640px){.income-settings-form{flex-direction:column;align-items:stretch;gap:13px}.income-settings-form .button{width:100%}.income-settings .income-settings-form input{font-size:16px}.income-settings .panel-header{align-items:flex-start}}

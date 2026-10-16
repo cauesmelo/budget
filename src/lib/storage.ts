@@ -239,6 +239,7 @@ function settings(value: unknown): Settings {
   const monthlyReturnPercent = source.monthlyReturnPercent;
   if (typeof monthlyReturnPercent !== 'number' || !Number.isFinite(monthlyReturnPercent) || monthlyReturnPercent < -100 || monthlyReturnPercent > 100) fail('settings.monthlyReturnPercent', 'must be a finite rate between -100 and 100');
   return {
+    ...(source.monthlyIncomeCents !== undefined ? { monthlyIncomeCents: integer(source.monthlyIncomeCents, 'settings.monthlyIncomeCents', 0) } : {}),
     initialReserveCents: integer(source.initialReserveCents, 'settings.initialReserveCents'),
     reserveStartMonth,
     monthlyReturnPercent,

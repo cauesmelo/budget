@@ -19,10 +19,11 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 
 ## First use
 
-1. Import your Itaú bank and card statements in `.xls` or `.xlsx` format. Card spending follows the purchase date shown in the export: an October purchase counts in October even if the bill is due in November. Review the reporting period, suggestions, and warnings before confirming. **Correct a card statement month** is only for missing or incorrect source metadata; it does not change spending months.
-2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Use the last-column checkbox for work expenses and reimbursements.
-3. In **Medium-term plan**, open **Plan settings** below the reserve chart to enter your starting reserve, monthly income, and planning horizon. Add planned expenses, edit monthly amounts, and follow the charts.
-4. In **Data and cloud**, export a backup or configure the Google Drive connection.
+1. In **Settings**, enter your current monthly take-home income and choose **Save income**.
+2. Import your Itaú bank and card statements in `.xls` or `.xlsx` format. Card spending follows the purchase date shown in the export: an October purchase counts in October even if the bill is due in November. Review the reporting period, suggestions, and warnings before confirming. **Correct a card statement month** is only for missing or incorrect source metadata; it does not change spending months.
+3. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Use the last-column checkbox for work expenses and reimbursements.
+4. In **Medium-term plan**, open **Plan settings** below the reserve chart to enter your starting reserve and planning horizon. Add planned expenses, edit monthly amounts, and follow the charts.
+5. In **Settings**, export a backup or configure the Google Drive connection.
 
 Use **Review categories** on the overview or transaction list to categorize pending income and expense transactions one at a time across all tracked months, including work entries and refunds. Uncategorized income and expenses share the same row highlight, filter, and review queue; account movements remain outside this review. The first nine category buttons are ordered by how often you have used them, with shortcuts kept stable for that review session. Press **1–9** to choose, start typing an optional description, then press **Enter** to save and continue. While editing the description, digits remain text; **Alt+1–9** changes the category. All available categories are also accessible through the searchable selector. Each saved entry leaves the queue immediately; you can leave and resume the remaining entries later.
 
@@ -32,7 +33,7 @@ Before confirming, use the trash button in the preview’s **Exclude** column to
 
 ## Categories
 
-Use **Manage categories**, available in Transactions and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.
+Use **Manage categories**, available in Transactions and Settings, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
@@ -42,7 +43,9 @@ New imports can prefill a category and description from unambiguous reviewed exp
 
 ## Understanding your month
 
-Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplus** from imported and manual personal transactions. These are records so far, not proof that every statement has been imported or that the month is complete. Empty months are identified explicitly. Work cash flow stays separate.
+Overview shows your configured **Monthly income**, **Spending so far** from imported and manual personal expenses, and **Remaining this month**: fixed income minus recorded spending, net of refunds. The income chart uses the same fixed amount. This remaining budget is not a measured bank or reserve balance, and recorded spending does not prove the month is complete. Work cash flow stays separate. Before income is configured, use **Set monthly income**; no salary is inferred from small imported credits.
+
+Set the take-home amount once in **Settings** and update it whenever needed. The saved amount applies to every reported and planned month. Imported salary, interest, reimbursements, and income reversals remain intact in Transactions; personal credits are not added on top of the fixed amount. Explicit zero is supported. The setting is included in local saves, backups, and Drive sync. Existing income plan rows are preserved but do not replace or add to a configured fixed income; older backups without the setting retain their original calculations until you configure it.
 
 **Where your money goes** lists net category amounts and their shares of positive category spending. Categories with net refunds appear separately; the signed totals reconcile to net spending. Select a category to review its transactions.
 
@@ -52,7 +55,7 @@ Overview shows **Recorded income**, **Recorded spending**, and **Recorded surplu
 
 The **Reserve growth** chart comes first, comparing opening reserve with the **PMS**, **PMR**, **PI**, and **PNIF** targets for each month. All calculated targets appear initially on the same currency scale. Use the legend checkboxes to hide targets and let the scale adjust to the visible lines. Missing targets stay uncalculated and leave gaps; no age or return assumption is invented. The PMS progress and projected reach date appear below the plot.
 
-Enter your planned expenses in the table below the chart. Open **Plan settings** to set your **Starting reserve** and **Monthly income**; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
+Enter your planned expenses in the table below the chart. **Monthly income** comes from Settings; use **Edit in Settings** to change it. Open **Plan settings** to set your **Starting reserve** and forecast assumptions; this section stays collapsed until you need it. The **Monthly (R$)** column repeats each expense amount for future months. Edit any individual month when the budget differs, including zero; use the small reset button to remove that month’s edit. The table totals and reserve chart update immediately.
 
 Use the up and down arrows beside an item name to reorder planned expenses or savings targets within their table. The order is saved locally, included in backups and Drive sync, and kept separate from financial edits. New items appear at the end; reordering does not change amounts or reserve calculations.
 
@@ -64,11 +67,11 @@ The main page shows planned spending, monthly savings, and the reserve projected
 
 Optional controls stay collapsed:
 
-- **Plan settings** changes the starting reserve, monthly income, first month, horizon, and monthly investment return.
+- **Plan settings** changes the starting reserve, first month, horizon, and monthly investment return. Monthly income is edited in **Settings**.
 - **Savings targets** keeps internal allocations separate from spending. They reduce the amount left after the allocation without subtracting savings from total assets again.
 - **Financial indicators** shows the Cerbasi targets and their assumptions.
 
-Existing data is retained without a migration on load. Older month-specific amounts, finite payments, date limits, and separate income sources keep their calculations. Focusing an amount and leaving it unchanged does not edit the record. Explicitly changing an old row’s repeating amount retains its saved months; editing outside an old date range preserves intervening months. All amounts and original records remain part of backups and synchronization.
+Existing data is retained without a migration on load. Older month-specific expense amounts, finite payments, and date limits keep their calculations. Separate income sources keep their calculations until fixed monthly income is configured, then remain stored without affecting the fixed baseline. Focusing an amount and leaving it unchanged does not edit the record. Explicitly changing an old row’s repeating amount retains its saved months; editing outside an old date range preserves intervening months. All amounts and original records remain part of backups and synchronization.
 
 The indicators follow [Gustavo Cerbasi's framework](https://www.gustavocerbasi.com.br/livros/4/como-organizar-sua-vida-financeira). This app uses each month's planned spending as the cost-of-living estimate:
 
@@ -87,7 +90,7 @@ Budget amounts and indicator assumptions are saved locally, in backups, and with
 
 ## Reporting period and a fresh start
 
-Monthly reports use account, card, and manual transactions. Income is recorded from actual credits; the app has no fixed historical salary assumptions or spreadsheet-history reporting mode. Budget workbooks are no longer an import format.
+Monthly spending reports use account, card, and manual transactions. Monthly income uses the fixed amount entered in Settings; there are no hardcoded salary values or spreadsheet-history reporting modes. Budget workbooks are no longer an import format.
 
 A saved reporting start month excludes earlier purchases from the overview, charts, and new statement imports, and limits manual entry dates. Card purchases use the date shown in the export. Older saved card rows and their deletion records are retained for backup and duplicate compatibility even when their purchase dates are outside the reporting period. The overview chart grows from the first reporting month instead of showing earlier history.
 
@@ -95,11 +98,11 @@ A fresh start has its own saved identity. Backups and Drive sync preserve it, so
 
 ## Personal and work cash flow
 
-The overview's income, expenses, net income, and category charts cover personal transactions. A separate **Work in / out** card shows work credits (reimbursements and refunds) and debits for the selected month. Its review link opens the work transaction filter. Monthly work cash flow is not an outstanding reimbursement balance: an expense and its reimbursement may occur in different months.
+The overview compares configured personal income with recorded personal spending. Its category chart covers personal expenses and refunds. A separate **Work in / out** card shows work credits (reimbursements and refunds) and debits for the selected month. Its review link opens the work transaction filter. Monthly work cash flow is not an outstanding reimbursement balance: an expense and its reimbursement may occur in different months.
 
 New imports and manual entries start as **Personal**. Check the box in the last transaction column to mark work expenses or reimbursements; uncheck it to count the transaction as personal. The column uses your saved work label. The same checkbox is available when adding a manual transaction. A positive income entry checked as work is labeled **Reimbursement**. Leave salary unchecked. Work account movements and deleted records are excluded from both sets of totals. Personal transactions without categories appear in a small review banner above the overview cards.
 
-In **Data and cloud**, customize the work label and optionally select category rules for older expense records without a saved personal or work choice, including archived categories. New imports are explicitly personal before category learning, so categories cannot silently mark a new transaction as work. Existing imported classifications remain visible and are preserved when a statement is uploaded again. Employer names and income descriptions never classify a deposit as a reimbursement. A saved personal or work choice takes priority over category rules. The work label, rules, and individual scopes are private financial data and are saved with backups and Drive synchronization. Older backups preserve the current work configuration when merged.
+In **Settings**, customize the work label and optionally select category rules for older expense records without a saved personal or work choice, including archived categories. New imports are explicitly personal before category learning, so categories cannot silently mark a new transaction as work. Existing imported classifications remain visible and are preserved when a statement is uploaded again. Employer names and income descriptions never classify a deposit as a reimbursement. A saved personal or work choice takes priority over category rules. The work label, rules, and individual scopes are private financial data and are saved with backups and Drive synchronization. Older backups preserve the current work configuration when merged.
 
 Work cash flow is separate from the independent medium-term plan; review planned commitments directly in the planning table.
 

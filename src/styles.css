@@ -27,6 +27,10 @@
 .tx-table .category-needed{display:flex;align-items:center;gap:5px;color:#7a4c0a;font-weight:600;line-height:1.5}
 .category-needed svg{flex-shrink:0}
 .transaction-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.metric-income-action{margin-top:12px}
+.plan-income-row td:first-child .text-button{display:flex;margin-top:7px;font-size:10px}
+.plan-income-setting{display:flex;flex-direction:column;align-items:flex-start;gap:10px;color:var(--text-secondary);font-size:12px}
+.plan-income-setting strong{font-size:18px;color:var(--ink)}
 .tx-table input{padding:9px;background:var(--surface);border:1px solid var(--control-border);border-radius:5px;font-size:12px;min-width:155px;width:100%;max-width:230px}
 input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .tx-table input:hover,.plan-table input:hover{border-color:#59795b}

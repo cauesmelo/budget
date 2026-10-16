@@ -138,9 +138,11 @@ export function getTransactionScope(data: FinanceData, transaction: Transaction)
 
 export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
   if (!isValidMonth(month)) throw new Error('Invalid month.');
+  const monthlyIncomeCents = data.settings.monthlyIncomeCents;
+  if (monthlyIncomeCents !== undefined && (!Number.isSafeInteger(monthlyIncomeCents) || monthlyIncomeCents < 0)) throw new Error('Invalid monthly income.');
   const transactions = data.transactions.filter(item => isReportableTransaction(data, item) && getTransactionReportingMonth(item) === month && !item.deletedAt && item.kind !== 'transfer');
   const workCategories = workCategoryKeys(data);
-  let incomeCents = 0;
+  let incomeCents = monthlyIncomeCents !== undefined && (!data.reporting || month >= data.reporting.startMonth) ? monthlyIncomeCents : 0;
   let expenseCents = 0;
   let workInCents = 0;
   let workOutCents = 0;
@@ -154,8 +156,10 @@ export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
       continue;
     }
     count++;
-    if (transaction.kind === 'income') incomeCents += transaction.amountCents;
-    else {
+    if (transaction.kind === 'income') {
+      // Configured income replaces receipts, so imported salary, interest, and reversals cannot count twice.
+      if (monthlyIncomeCents === undefined) incomeCents += transaction.amountCents;
+    } else {
       const amount = -transaction.amountCents;
       expenseCents += amount;
       const category = transaction.category.trim() || 'Uncategorized';
@@ -221,8 +225,9 @@ function indicator(targetCents: number | null, openingCents: number): PlanningIn
 }
 
 export function projectReserve(data: FinanceData): ProjectionMonth[] {
-  const { reserveStartMonth, horizonMonths, monthlyReturnPercent, initialReserveCents } = data.settings;
+  const { reserveStartMonth, horizonMonths, monthlyReturnPercent, initialReserveCents, monthlyIncomeCents } = data.settings;
   if (!isValidMonth(reserveStartMonth) || !Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 600 || !Number.isFinite(monthlyReturnPercent) || !Number.isSafeInteger(initialReserveCents)) throw new Error('Invalid projection settings.');
+  if (monthlyIncomeCents !== undefined && (!Number.isSafeInteger(monthlyIncomeCents) || monthlyIncomeCents < 0)) throw new Error('Invalid monthly income.');
   const { age, pmrMonths = 12, annualNetReturnPercent } = data.planning ?? {};
   if (age !== undefined && (!Number.isInteger(age) || age < 1 || age > 120)) throw new Error('Invalid planning age.');
   if (pmrMonths !== 12 && pmrMonths !== 20) throw new Error('Invalid minimum reserve target.');
@@ -231,13 +236,15 @@ export function projectReserve(data: FinanceData): ProjectionMonth[] {
   let openingCents = initialReserveCents;
   for (let index = 0; index < horizonMonths; index++) {
     const month = addMonths(reserveStartMonth, index);
-    let incomeCents = 0;
+    let incomeCents = monthlyIncomeCents ?? 0;
     let expenseCents = 0;
     let contributionCents = 0;
     for (const item of data.planItems) {
       const amount = planAmountForMonth(item, month);
-      if (item.kind === 'income') incomeCents = safeCents(incomeCents + amount);
-      else if (item.kind === 'expense') expenseCents = safeCents(expenseCents + amount);
+      if (item.kind === 'income') {
+        // Existing income rows remain stored; a configured fixed income is the single planning baseline.
+        if (monthlyIncomeCents === undefined) incomeCents = safeCents(incomeCents + amount);
+      } else if (item.kind === 'expense') expenseCents = safeCents(expenseCents + amount);
       else if (item.kind === 'contribution') contributionCents = safeCents(contributionCents + amount);
     }
     // Only saved assets earn investment returns; a reserve shortfall is not a debt-interest model.
@@ -426,10 +433,10 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
   const localSettings = { ...local.settings, googleClientId: '' };
   const remoteSettings = { ...remote.settings, googleClientId: '' };
   const pristineLocal = local.reporting === undefined && local.work === undefined && local.planning === undefined && local.planOrder === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
-    local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
+    local.settings.monthlyIncomeCents === undefined && local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
   const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.planning !== undefined || remote.planOrder !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
-    remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
+    remote.settings.monthlyIncomeCents !== undefined || remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
   const settings = epochData?.settings ?? (pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings);
   const work = local.work === undefined ? remote.work : remote.work === undefined ? local.work :

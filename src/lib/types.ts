@@ -65,6 +65,8 @@ export interface ImportBatch {
   updatedAt: string;
 }
 export interface Settings {
+  /** Fixed personal income used in reports and projections; absence preserves transaction and plan income. */
+  monthlyIncomeCents?: number;
   initialReserveCents: number;
   reserveStartMonth: string;
   monthlyReturnPercent: number;

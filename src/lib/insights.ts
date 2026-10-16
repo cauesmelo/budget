@@ -1,4 +1,4 @@
-import { getTransactionScope, isReportableTransaction, isValidMonth, projectReserve } from './finance';
+import { getTransactionScope, isReportableTransaction, isValidMonth, projectReserve, summarizeMonth } from './finance';
 import type { FinanceData, ProjectionMonth } from './types';
 import { getTransactionReportingMonth } from './transactionMonth';
 
@@ -151,12 +151,14 @@ export function getBudgetComparison(data: FinanceData, month: string): BudgetCom
   const row = projectReserve(data).find(entry => entry.month === month);
   if (!row || !data.planItems.some(item => !item.deletedAt && item.kind === 'expense' && item.startMonth <= month && (!item.endMonth || item.endMonth >= month))) return null;
   const recorded = data.transactions.filter(transaction => !transaction.deletedAt && getTransactionReportingMonth(transaction) === month && transaction.kind !== 'transfer' && isReportableTransaction(data, transaction) && getTransactionScope(data, transaction) === 'personal');
-  let recordedIncomeCents = 0;
+  // Use the same income basis as the overview while retaining evidence flags for actual records.
+  let recordedIncomeCents = data.settings.monthlyIncomeCents === undefined ? 0 : cents(summarizeMonth(data, month).incomeCents);
   let recordedExpenseCents = 0;
   for (const transaction of recorded) {
     cents(transaction.amountCents);
-    if (transaction.kind === 'income') recordedIncomeCents = cents(recordedIncomeCents + transaction.amountCents);
-    else recordedExpenseCents = cents(recordedExpenseCents - transaction.amountCents);
+    if (transaction.kind === 'income') {
+      if (data.settings.monthlyIncomeCents === undefined) recordedIncomeCents = cents(recordedIncomeCents + transaction.amountCents);
+    } else recordedExpenseCents = cents(recordedExpenseCents - transaction.amountCents);
   }
   return {
     month,
