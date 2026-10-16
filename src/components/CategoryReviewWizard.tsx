@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, Tag } from 'lucide-react';
 import { CategorySelect } from './CategorySelect';
-import { availableCategoryNames } from '../lib/categories';
+import { availableCategoryNames, resolveCategoryName } from '../lib/categories';
 import { getRankedReviewCategories } from '../lib/categoryReview';
 import { formatMoney, getTransactionScope } from '../lib/finance';
 import { formatNumber } from '../lib/numbers';
@@ -63,7 +63,8 @@ function TransactionReview({ transaction, data, categories, onSave, onManageCate
   const focusedOnce = useRef(false);
   const pendingCaret = useRef<number | null>(null);
   const shortcuts = categories.slice(0, 9);
-  const selected = categories.includes(category) ? category : '';
+  const resolvedCategory = resolveCategoryName(data, category);
+  const selected = categories.includes(resolvedCategory) ? resolvedCategory : '';
   const scope = getTransactionScope(data, transaction);
 
   useLayoutEffect(() => {

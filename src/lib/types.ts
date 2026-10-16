@@ -81,6 +81,10 @@ export interface Category {
   name: string;
   updatedAt: string;
   archivedAt?: string;
+  /** Retained so older backups and devices cannot recreate a deleted category. */
+  deletedAt?: string;
+  /** Replacement category name; preserved aliases keep this link valid after a rename. */
+  replacementCategory?: string;
   aliases?: string[];
 }
 export interface ReportingConfiguration {

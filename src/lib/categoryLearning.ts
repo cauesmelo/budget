@@ -10,7 +10,7 @@ const merchantName = (value: string): string => value.trim().normalize('NFD')
 export function getSimilarUncategorizedExpenses(data: FinanceData, sourceTransactionId: string): Transaction[] {
   const source = data.transactions.find(transaction => transaction.id === sourceTransactionId && !transaction.deletedAt);
   if (!source || source.kind !== 'expense' || !source.category.trim() || !isReportableTransaction(data, source)) return [];
-  const category = data.categories.find(entry => !entry.archivedAt
+  const category = data.categories.find(entry => !entry.deletedAt && !entry.archivedAt
     && [entry.name, ...(entry.aliases ?? [])].some(name => categoryNameKey(name) === categoryNameKey(source.category)));
   const merchant = merchantName(source.originalDescription);
   if (!category || !merchant) return [];

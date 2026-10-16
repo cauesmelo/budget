@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Archive, Check, Pencil, Plus, RotateCcw, Search, Tag, X } from 'lucide-react';
+import { Archive, Check, Pencil, Plus, RotateCcw, Search, Tag, Trash2, X } from 'lucide-react';
 import type { FinanceData } from '../lib/types';
 import { formatNumber } from '../lib/numbers';
-import { addCategory, archiveCategory, listCategories, renameCategory, restoreCategory } from '../lib/categories';
+import { addCategory, archiveCategory, categoryNameKey, deleteCategory, listCategories, renameCategory, restoreCategory } from '../lib/categories';
+import { CategoryDeletion } from './CategoryDeletion';
 
 interface CategoryManagerProps {
   data: FinanceData;
@@ -19,17 +20,27 @@ export function CategoryManager({ data, onEdit, onClose }: CategoryManagerProps)
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const cancelDeletion = useRef<() => void>(() => {});
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const categories = listCategories(data);
   const activeCount = categories.filter(category => !category.archivedAt).length;
   const visible = categories.filter(category => (showArchived || !category.archivedAt) && category.name.toLocaleLowerCase('pt-BR').includes(query.trim().toLocaleLowerCase('pt-BR')));
+  const deletionCategory = categories.find(category => category.id === deleting);
+  cancelDeletion.current = () => {
+    const sourceId = deleting;
+    setDeleting(null); setError('');
+    requestAnimationFrame(() => Array.from(panel.current?.querySelectorAll<HTMLButtonElement>('[data-delete-category-id]') ?? []).find(button => button.dataset.deleteCategoryId === sourceId)?.focus());
+  };
+  const deletionOpen = useRef(false);
+  deletionOpen.current = Boolean(deletionCategory);
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     nameInput.current?.focus();
     function keys(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !(event.target as HTMLElement)?.closest('.category-popup')) { event.preventDefault(); onClose(); }
+      if (event.key === 'Escape' && !(event.target as HTMLElement)?.closest('.category-popup')) { event.preventDefault(); if (deletionOpen.current) cancelDeletion.current(); else onClose(); }
       if (event.key !== 'Tab' || (event.target as HTMLElement)?.closest('.category-popup')) return;
       const focusable = panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]');
       if (!focusable?.length) return;
@@ -52,29 +63,38 @@ export function CategoryManager({ data, onEdit, onClose }: CategoryManagerProps)
 
   return <div className="modal-backdrop category-manager-backdrop" onClick={onClose}><div ref={panel} className="modal panel category-manager" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} onClick={event => event.stopPropagation()}>
     <div className="panel-header"><div><h2 id={`${id}-title`}>Manage categories</h2><p>{formatNumber(activeCount)} available for transactions</p></div><button className="icon-button" aria-label="Close category manager" onClick={onClose}><X size={20} /></button></div>
-    <p className="category-manager-intro">Create categories that work for you. Renaming updates existing records; archiving preserves history and removes the category from new transactions.</p>
+    {error && <div role="alert" className="alert error">{error}</div>}
+    {status && <div role="status" className="alert success"><Check size={16} />{status}</div>}
+    {deletionCategory ? <CategoryDeletion key={deletionCategory.id} data={data} category={deletionCategory} onCancel={() => cancelDeletion.current()} onDelete={replacement => {
+      const accepted = perform(current => deleteCategory(current, deletionCategory.id, replacement), replacement ? `Category deleted. Assigned items now use ${replacement}.` : 'Category deleted.');
+      if (accepted) {
+        setDeleting(null);
+        requestAnimationFrame(() => panel.current?.querySelector<HTMLInputElement>('[aria-label="Search existing categories"]')?.focus());
+      }
+      return accepted;
+    }} /> : <>
+    <p className="category-manager-intro">Create categories that work for you. Renaming updates existing records. Archive categories to preserve history, or delete them and choose a replacement for assigned items.</p>
     <form className="category-create" onSubmit={event => { event.preventDefault(); if (perform(current => addCategory(current, newName), 'Category created.')) { setNewName(''); nameInput.current?.focus(); } }}>
       <label className="field"><span>New category</span><input ref={nameInput} aria-label="New category name" autoComplete="off" placeholder="e.g., Food" value={newName} maxLength={200} onChange={event => setNewName(event.target.value)} /></label>
       <button type="submit" className="button"><Plus size={16} /> Create category</button>
     </form>
-    {error && <div role="alert" className="alert error">{error}</div>}
-    {status && <div role="status" className="alert success"><Check size={16} />{status}</div>}
     <div className="category-manager-filters"><div className="search"><Search size={16} /><input aria-label="Search existing categories" placeholder="Search categories" value={query} onChange={event => setQuery(event.target.value)} /></div><label className="category-archived-toggle"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} /> Show archived</label></div>
     <div className="managed-category-list">
       {visible.map(category => {
-        const names = new Set([category.name, ...(category.aliases || [])]);
-        const transactions = data.transactions.filter(tx => !tx.deletedAt && names.has(tx.category)).length;
+        const names = new Set([category.name, ...(category.aliases || [])].map(categoryNameKey));
+        const transactions = data.transactions.filter(tx => !tx.deletedAt && names.has(categoryNameKey(tx.category))).length;
         return <div className={`managed-category-row ${category.archivedAt ? 'archived' : ''}`} key={category.id}>
           <div className="managed-category-icon"><Tag size={17} /></div>
           <div className="managed-category-details">
             {editing === category.id ? <form className="category-rename" onSubmit={event => { event.preventDefault(); if (perform(current => renameCategory(current, category.id, draft), 'Category renamed.')) setEditing(null); }}><input aria-label={`New name for ${category.name}`} autoFocus value={draft} maxLength={200} onChange={event => setDraft(event.target.value)} /><button type="submit" className="icon-button" aria-label={`Save name for ${category.name}`} title="Save name"><Check size={17} /></button><button type="button" className="icon-button" aria-label="Cancel renaming" onClick={() => { setEditing(null); setError(''); }}><X size={17} /></button></form> : <strong>{category.name}</strong>}
             <small>{formatNumber(transactions)} {transactions === 1 ? 'transaction' : 'transactions'}{category.archivedAt && <span className="category-archived-badge">Archived</span>}</small>
           </div>
-          {editing !== category.id && <div className="managed-category-actions"><button type="button" className="icon-button" aria-label={`Rename ${category.name}`} title="Rename" onClick={() => { setEditing(category.id); setDraft(category.name); setError(''); setStatus(''); }}><Pencil size={16} /></button>{category.archivedAt ? <button type="button" className="icon-button" aria-label={`Restore ${category.name}`} title="Restore" onClick={() => perform(current => restoreCategory(current, category.id), 'Category restored.')}><RotateCcw size={16} /></button> : <button type="button" className="icon-button" aria-label={`Archive ${category.name}`} title="Archive" onClick={() => perform(current => archiveCategory(current, category.id), 'Category archived. Your records were preserved.')}><Archive size={16} /></button>}</div>}
+          {editing !== category.id && <div className="managed-category-actions"><button type="button" className="icon-button" aria-label={`Rename ${category.name}`} title="Rename" onClick={() => { setEditing(category.id); setDraft(category.name); setError(''); setStatus(''); }}><Pencil size={16} /></button>{category.archivedAt ? <button type="button" className="icon-button" aria-label={`Restore ${category.name}`} title="Restore" onClick={() => perform(current => restoreCategory(current, category.id), 'Category restored.')}><RotateCcw size={16} /></button> : <button type="button" className="icon-button" aria-label={`Archive ${category.name}`} title="Archive" onClick={() => perform(current => archiveCategory(current, category.id), 'Category archived. Your records were preserved.')}><Archive size={16} /></button>}<button type="button" className="icon-button danger category-delete-action" data-delete-category-id={category.id} aria-label={`Delete ${category.name}`} title="Delete category" onClick={() => { setDeleting(category.id); setEditing(null); setError(''); setStatus(''); }}><Trash2 size={16} /></button></div>}
         </div>;
       })}
       {!visible.length && <div className="category-manager-empty"><Tag size={24} /><p>{query ? 'No categories match this filter.' : showArchived ? 'Create your first category above.' : 'No categories available. Create one or show archived categories.'}</p></div>}
     </div>
     <div className="category-manager-footer"><small>Categories are included in backups and sync.</small><button type="button" className="button secondary" onClick={onClose}>Done</button></div>
+    </>}
   </div></div>;
 }

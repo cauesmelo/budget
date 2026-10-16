@@ -29,6 +29,17 @@ function reviewed(id = 'old', patch: Partial<Transaction> = {}): Transaction {
 }
 
 describe('personal import default', () => {
+  it('does not suggest deleted categories from stale merchant assignments', () => {
+    const data = fixture();
+    data.categories[0].deletedAt = LATER;
+    data.transactions = [reviewed()];
+    const incoming = transaction('new');
+    const before = structuredClone(data);
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.learnedCount).toBe(0);
+    expect(prepared.result.transactions[0]).toMatchObject({ category: '', description: '' });
+    expect(data).toEqual(before);
+  });
   it('makes fresh rows explicitly personal even when their category is configured for work', () => {
     const data = fixture();
     data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };

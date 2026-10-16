@@ -52,7 +52,7 @@ function categoryLookup(categories: Category[]): Map<string, Category> {
 export function prepareImportReview(data: FinanceData, result: ImportResult): PreparedImportReview {
   const ids = new Map(data.transactions.map(transaction => [transaction.id, transaction]));
   const fingerprints = new Map(data.transactions.map(transaction => [transaction.fingerprint, transaction]));
-  const categories = categoryLookup(data.categories);
+  const categories = categoryLookup(data.categories.filter(category => !category.deletedAt));
   const history = new Map<string, Transaction[]>();
   const duplicateCandidates = new Map<string, Transaction[]>();
   for (const transaction of data.transactions) {

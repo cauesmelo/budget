@@ -227,8 +227,30 @@ function category(value: unknown, path: string): Category {
     name,
     updatedAt: timestamp(source.updatedAt, `${path}.updatedAt`),
     ...(source.archivedAt !== undefined ? { archivedAt: timestamp(source.archivedAt, `${path}.archivedAt`) } : {}),
+    ...(source.deletedAt !== undefined ? { deletedAt: timestamp(source.deletedAt, `${path}.deletedAt`) } : {}),
+    ...(source.replacementCategory !== undefined ? { replacementCategory: string(source.replacementCategory, `${path}.replacementCategory`, false, 500) } : {}),
     ...(aliases !== undefined ? { aliases } : {}),
   };
+}
+
+function validateCategoryReplacements(categories: Category[], labels: Map<string, string>): void {
+  const byId = new Map(categories.map(record => [record.id, record]));
+  const resolved = new Set<string>();
+  for (const category of categories) {
+    if (category.replacementCategory === undefined) continue;
+    if (!category.deletedAt) fail('categories', 'contains a replacement on a category that is not deleted');
+    if (category.replacementCategory !== category.replacementCategory.normalize('NFC').trim().replace(/\s+/g, ' ')) fail('categories', 'contains a replacement with excess whitespace');
+    const chain = new Set<string>();
+    let current: Category | undefined = category;
+    while (current?.replacementCategory !== undefined && !resolved.has(current.id)) {
+      if (chain.has(current.id)) fail('categories', 'contains a replacement cycle');
+      chain.add(current.id);
+      const targetId = labels.get(categoryNameKey(current.replacementCategory));
+      if (targetId === undefined) fail('categories', 'references an unknown replacement category');
+      current = byId.get(targetId);
+    }
+    for (const id of chain) resolved.add(id);
+  }
 }
 
 function settings(value: unknown): Settings {
@@ -313,6 +335,7 @@ export function validateBackup(payload: unknown): FinanceData {
       categoryLabels.set(key, record.id);
     }
   }
+  validateCategoryReplacements(categories, categoryLabels);
   const parsed: FinanceData = {
     version: 1,
     categories,

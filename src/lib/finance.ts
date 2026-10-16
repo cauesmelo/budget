@@ -428,16 +428,20 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     compareRecords(local.reporting, remote.reporting) >= 0 ? local.reporting : remote.reporting;
   local = normalizeCategoryData(sanitizeFinanceData(local, reporting?.startMonth));
   remote = normalizeCategoryData(sanitizeFinanceData(remote, reporting?.startMonth));
-  const sameEpoch = local.reporting?.resetId === remote.reporting?.resetId;
-  const epochData = sameEpoch ? undefined : local.reporting?.resetId === reporting?.resetId ? local : remote;
-  const localSettings = { ...local.settings, googleClientId: '' };
-  const remoteSettings = { ...remote.settings, googleClientId: '' };
   const pristineLocal = local.reporting === undefined && local.work === undefined && local.planning === undefined && local.planOrder === undefined && local.categories.length === 0 && local.transactions.length === 0 && local.planItems.length === 0 && local.imports.length === 0 &&
     local.settings.monthlyIncomeCents === undefined && local.settings.initialReserveCents === 0 && local.settings.reserveGoalCents === 0 && local.settings.monthlyReturnPercent === 0 && local.settings.horizonMonths === 24;
   // The creation timestamp in a new browser is not a financial edit.
   const remoteHasSavedState = remote.reporting !== undefined || remote.work !== undefined || remote.planning !== undefined || remote.planOrder !== undefined || remote.categories.length > 0 || remote.transactions.length > 0 || remote.planItems.length > 0 || remote.imports.length > 0 ||
     remote.settings.monthlyIncomeCents !== undefined || remote.settings.initialReserveCents !== 0 || remote.settings.reserveGoalCents !== 0 || remote.settings.monthlyReturnPercent !== 0 || remote.settings.horizonMonths !== 24 ||
     remote.settings.reserveStartMonth !== local.settings.reserveStartMonth;
+  const categories = mergeCategoryCatalog(local.categories, remote.categories);
+  // Resolve deletions while each device's own work rules can still preserve transaction scope.
+  local = normalizeCategoryData({ ...local, categories }, false);
+  remote = normalizeCategoryData({ ...remote, categories }, false);
+  const sameEpoch = local.reporting?.resetId === remote.reporting?.resetId;
+  const epochData = sameEpoch ? undefined : local.reporting?.resetId === reporting?.resetId ? local : remote;
+  const localSettings = { ...local.settings, googleClientId: '' };
+  const remoteSettings = { ...remote.settings, googleClientId: '' };
   const settings = epochData?.settings ?? (pristineLocal && remoteHasSavedState ? remote.settings : compareRecords(localSettings, remoteSettings) >= 0 ? local.settings : remote.settings);
   const work = local.work === undefined ? remote.work : remote.work === undefined ? local.work :
     compareRecords(local.work, remote.work) >= 0 ? local.work : remote.work;
@@ -447,7 +451,7 @@ export function mergeFinanceData(local: FinanceData, remote: FinanceData): Finan
     compareRecords(local.planOrder, remote.planOrder) >= 0 ? local.planOrder : remote.planOrder;
   const merged: FinanceData = {
     version: 1,
-    categories: mergeCategoryCatalog(local.categories, remote.categories),
+    categories,
     transactions: epochData ? structuredClone(epochData.transactions) : mergeRecords(local.transactions, remote.transactions),
     planItems: epochData ? structuredClone(epochData.planItems) : mergePlanItems(local.planItems, remote.planItems),
     imports: epochData ? structuredClone(epochData.imports) : mergeRecords(local.imports, remote.imports),

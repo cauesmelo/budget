@@ -37,6 +37,8 @@ In **Settings**, open **Categories → Manage categories** directly below Monthl
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
+Use a category's trash button to delete it. If it is assigned to transactions, plan items, or work rules, choose a different available category and select **Replace and delete**. Historical and deleted records are included in the reassignment; amounts, descriptions, and personal/work classifications are preserved. An unused category can be deleted without a replacement. Deleted categories disappear from lists and filters, and older backups or synchronized devices cannot bring them back. Their names and aliases remain reserved; use a different name for a new category. Archiving remains the reversible option.
+
 Planning uses expense names, a repeating monthly amount, and editable amounts for individual months. Categories apply to actual transactions.
 
 New imports can prefill a category and description from unambiguous reviewed expenses with the same normalized merchant text, source, account, and scope. Conflicting, archived, or unknown categories prevent learning. Merchant learning leaves transaction types and amounts unchanged and never infers work scope. Review the prefilled fields before confirming. For existing expenses, **Apply to N similar** explicitly assigns the selected category to matching uncategorized expenses without overwriting reviewed categories or changing scope.

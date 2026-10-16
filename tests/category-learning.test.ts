@@ -38,6 +38,7 @@ describe('explicit category application to similar expenses', () => {
     ['an uncategorized source', (data: FinanceData) => { data.transactions[0].category = ''; }],
     ['an unregistered category', (data: FinanceData) => { data.transactions[0].category = 'Unknown'; }],
     ['an archived category', (data: FinanceData) => { data.categories[0].archivedAt = STAMP; }],
+    ['a deleted category', (data: FinanceData) => { data.categories[0].deletedAt = STAMP; }],
     ['an empty merchant', (data: FinanceData) => { data.transactions[0].originalDescription = ' '; }],
   ])('requires a valid reviewed expense for %s', (_label, edit) => {
     const data = fixture();

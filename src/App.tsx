@@ -5,7 +5,7 @@ import type { FinanceData, PlanItem, Transaction } from './lib/types';
 import { addMonths, applyImport, createEmptyData, formatMoney, formatMonth, getTransactionScope, isReportableTransaction, mergeFinanceData, parseMoneyToCents, planAmountForMonth, previewDuplicateCount, projectReserve, summarizeMonth } from './lib/finance';
 import { loadData, saveData, serializeBackup, validateBackup } from './lib/storage';
 import { APP_ID } from './lib/identity';
-import { allCategoryNames, assertAvailableCategory, availableCategoryNames, categoryNameKey, listCategories } from './lib/categories';
+import { allCategoryNames, assertAvailableCategory, availableCategoryNames, categoryNameKey, listCategories, resolveCategoryName } from './lib/categories';
 import { CategorySelect } from './components/CategorySelect';
 import { CategoryManager } from './components/CategoryManager';
 import { CategoryReviewWizard } from './components/CategoryReviewWizard';
@@ -225,14 +225,14 @@ export default function App() {
   }, [startMonth]);
   useEffect(() => {
     if (!filterCategory.startsWith('category:')) return;
-    const selected = categoryNameKey(filterCategory.slice(9));
+    const selected = categoryNameKey(resolveCategoryName(data, filterCategory.slice(9)));
     const current = listCategories(data).find(category => [category.name, ...(category.aliases ?? [])].some(name => categoryNameKey(name) === selected));
     const nextFilter = current ? `category:${current.name}` : '';
     if (nextFilter !== filterCategory) setFilterCategory(nextFilter);
   }, [data.categories, filterCategory]);
   useEffect(() => {
     if (!addCategory) return;
-    const selected = categoryNameKey(addCategory);
+    const selected = categoryNameKey(resolveCategoryName(data, addCategory));
     const current = listCategories(data).find(category => !category.archivedAt && [category.name, ...(category.aliases ?? [])].some(name => categoryNameKey(name) === selected));
     const nextCategory = current?.name ?? '';
     if (nextCategory !== addCategory) setAddCategory(nextCategory);
@@ -379,10 +379,11 @@ export default function App() {
   const importPreviews = useMemo(() => {
     let prior = data;
     return pending.map(item => {
-      const duplicates = previewDuplicateCount(prior, item.result);
-      const possibleDuplicates = prepareImportReview(prior, item.result).possibleDuplicates;
-      prior = applyImport(prior, item.result, item.name);
-      return { ...item, duplicates, newCount: item.result.transactions.length - duplicates, possibleDuplicates };
+      const result = { ...item.result, transactions: item.result.transactions.map(transaction => ({ ...transaction, category: resolveCategoryName(prior, transaction.category) })) };
+      const duplicates = previewDuplicateCount(prior, result);
+      const possibleDuplicates = prepareImportReview(prior, result).possibleDuplicates;
+      prior = applyImport(prior, result, item.name);
+      return { ...item, result, duplicates, newCount: result.transactions.length - duplicates, possibleDuplicates };
     });
   }, [data, pending]);
 

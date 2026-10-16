@@ -8,12 +8,14 @@ interface CategorySelectProps {
   onChange: (value: string) => void;
   label: string;
   filter?: boolean;
+  allowUncategorized?: boolean;
+  placeholder?: string;
 }
 
 const searchKey = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
 
 /** Search text only narrows the catalog. Values are committed by choosing an option. */
-export function CategorySelect({ value, options, onChange, label, filter = false }: CategorySelectProps) {
+export function CategorySelect({ value, options, onChange, label, filter = false, allowUncategorized = true, placeholder = 'Uncategorized' }: CategorySelectProps) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
@@ -23,11 +25,11 @@ export function CategorySelect({ value, options, onChange, label, filter = false
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number }>({ left: 0, top: 0, width: 240, maxHeight: 300 });
   const choices = [
-    ...(filter ? [{ value: '', label: 'All categories' }, { value: '__empty', label: 'Uncategorized' }] : [{ value: '', label: 'Uncategorized' }]),
+    ...(filter ? [{ value: '', label: 'All categories' }, { value: '__empty', label: 'Uncategorized' }] : allowUncategorized ? [{ value: '', label: 'Uncategorized' }] : []),
     ...options.map(name => ({ value: filter ? `category:${name}` : name, label: name })),
   ];
   const visible = choices.filter(option => searchKey(option.label).includes(searchKey(query.trim())));
-  const display = choices.find(option => option.value === value)?.label || value || 'Uncategorized';
+  const display = choices.find(option => option.value === value)?.label || value || placeholder;
 
   function close(restoreFocus = false) {
     setOpen(false); setQuery('');
