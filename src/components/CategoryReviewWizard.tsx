@@ -36,7 +36,7 @@ export function CategoryReviewWizard({ data, transactions, onSave, onClose, onMa
       <span className="category-wizard-count" role="status">{formatNumber(completed)} saved · {formatNumber(transactions.length)} remaining · all months</span>
     </div>
     <progress className="category-wizard-progress" aria-label="Category review progress" max={Math.max(1, total)} value={transaction ? completed : Math.max(1, total)} />
-    {transaction ? <ExpenseReview key={`${transaction.id}:${transaction.updatedAt}`} transaction={transaction} data={data} categories={categories} suspended={suspended} onManageCategories={onManageCategories} onSave={(category, description) => {
+    {transaction ? <TransactionReview key={`${transaction.id}:${transaction.updatedAt}`} transaction={transaction} data={data} categories={categories} suspended={suspended} onManageCategories={onManageCategories} onSave={(category, description) => {
       const accepted = onSave(transaction, category, description);
       if (accepted) setCompleted(count => count + 1);
       return accepted;
@@ -44,7 +44,7 @@ export function CategoryReviewWizard({ data, transactions, onSave, onClose, onMa
   </section>;
 }
 
-function ExpenseReview({ transaction, data, categories, onSave, onManageCategories, suspended }: {
+function TransactionReview({ transaction, data, categories, onSave, onManageCategories, suspended }: {
   transaction: Transaction;
   data: FinanceData;
   categories: string[];
@@ -161,6 +161,6 @@ function ReviewComplete({ completed, onClose }: { completed: number; onClose: ()
   const panel = useRef<HTMLElement>(null);
   useLayoutEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
   return <section ref={panel} className="panel category-wizard-complete" tabIndex={-1} aria-label="Category review complete">
-    <span className="category-wizard-complete-icon"><Check size={28} /></span><h2>All caught up.</h2><p>{completed ? `${formatNumber(completed)} ${completed === 1 ? 'expense' : 'expenses'} categorized. ` : ''}No expenses are waiting for a category.</p><button type="button" className="button" onClick={onClose}>Back to transactions <ArrowRight size={16} /></button>
+    <span className="category-wizard-complete-icon"><Check size={28} /></span><h2>All caught up.</h2><p>{completed ? `${formatNumber(completed)} ${completed === 1 ? 'transaction' : 'transactions'} categorized. ` : ''}No transactions are waiting for a category.</p><button type="button" className="button" onClick={onClose}>Back to transactions <ArrowRight size={16} /></button>
   </section>;
 }

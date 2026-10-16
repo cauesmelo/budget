@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPendingCategoryReviews, getRankedReviewCategories } from '../src/lib/categoryReview';
+import { getPendingCategoryReviews, getRankedReviewCategories, needsTransactionCategory } from '../src/lib/categoryReview';
 import { createEmptyData } from '../src/lib/finance';
 import type { FinanceData, Transaction } from '../src/lib/types';
 
@@ -26,6 +26,21 @@ function fixture(): FinanceData {
   return data;
 }
 
+describe('transactions needing a category', () => {
+  it.each([
+    { kind: 'income', category: '', expected: true },
+    { kind: 'income', category: '  \t ', expected: true },
+    { kind: 'expense', category: '', expected: true },
+    { kind: 'expense', category: '  \t ', expected: true },
+    { kind: 'income', category: 'Salary', expected: false },
+    { kind: 'expense', category: 'Food', expected: false },
+    { kind: 'transfer', category: '', expected: false },
+    { kind: 'transfer', category: '  ', expected: false },
+  ] as const)('identifies $kind with category "$category" as pending: $expected', ({ kind, category, expected }) => {
+    expect(needsTransactionCategory({ kind, category })).toBe(expected);
+  });
+});
+
 describe('pending category reviews', () => {
   it('includes expenses, refunds and work entries from all tracked months', () => {
     const data = fixture();
@@ -41,13 +56,26 @@ describe('pending category reviews', () => {
     expect(data).toEqual(before);
   });
 
-  it('excludes categorized, deleted, income, transfer and pre-start purchase entries', () => {
+  it('includes positive income and negative income reversals without changing their kind or amount', () => {
+    const data = fixture();
+    data.transactions = [
+      transaction('income', { kind: 'income', amountCents: 2_000, date: '2032-10-15' }),
+      transaction('income-reversal', { kind: 'income', amountCents: -500, category: ' \t ' }),
+    ];
+    const before = structuredClone(data);
+    expect(getPendingCategoryReviews(data)).toEqual(data.transactions);
+    expect(data).toEqual(before);
+  });
+
+  it('excludes categorized, deleted, transfer and pre-start purchase entries', () => {
     const data = fixture();
     data.transactions = [
       transaction('pending'), transaction('reviewed', { category: 'Food' }),
       transaction('archived-assignment', { category: 'Retired' }),
       transaction('deleted', { deletedAt: STAMP }),
-      transaction('income', { kind: 'income', amountCents: 2_000 }),
+      transaction('categorized-income', { kind: 'income', amountCents: 2_000, category: 'Salary' }),
+      transaction('deleted-income', { kind: 'income', amountCents: 2_000, deletedAt: STAMP }),
+      transaction('older-income', { kind: 'income', date: '2032-09-30', month: '2032-11' }),
       transaction('transfer', { kind: 'transfer' }),
       transaction('older-purchase', { date: '2032-09-30', month: '2032-11' }),
     ];
@@ -111,12 +139,26 @@ describe('category review popularity', () => {
     expect(getRankedReviewCategories(data)).toEqual(['Food', 'Travel', 'Bills']);
   });
 
-  it('ignores inactive records, income, transfers, unregistered labels and archived choices', () => {
+  it('counts positive income and negative income reversals by category without changing transaction semantics', () => {
+    const data = fixture();
+    data.transactions = [
+      transaction('income', { category: 'Bills', kind: 'income', amountCents: 2_000 }),
+      transaction('income-reversal', { category: 'Bills', kind: 'income', amountCents: -500 }),
+      transaction('travel', { category: 'Travel' }),
+      transaction('food', { category: 'Food' }),
+    ];
+    const before = structuredClone(data);
+    expect(getRankedReviewCategories(data)).toEqual(['Bills', 'Food', 'Travel']);
+    expect(data).toEqual(before);
+  });
+
+  it('ignores inactive records, transfers, unregistered labels and archived choices', () => {
     const data = fixture();
     data.transactions = [
       transaction('travel', { category: 'Travel' }),
       transaction('deleted', { category: 'Food', deletedAt: STAMP }),
-      transaction('income', { category: 'Food', kind: 'income' }),
+      transaction('deleted-income', { category: 'Food', kind: 'income', deletedAt: STAMP }),
+      transaction('older-income', { category: 'Food', kind: 'income', date: '2032-09-30' }),
       transaction('transfer', { category: 'Food', kind: 'transfer' }),
       transaction('before-start', { category: 'Food', date: '2032-09-30' }),
       transaction('unknown', { category: 'Unregistered' }),
