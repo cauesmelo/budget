@@ -51,7 +51,13 @@ Set the take-home amount once in **Settings** and update it whenever needed. The
 
 **Where your money goes** lists net category amounts and their shares of positive category spending. Categories with net refunds appear separately; the signed totals reconcile to net spending. Select a category to review its transactions.
 
-**Spending vs plan** compares recorded personal spending, net of refunds, with that month's planned expenses. It shows the amount remaining or over plan. Missing plans and months without recorded spending have separate messages. The reserve forecast remains based on your plan, rather than a measured account balance.
+**Monthly budget** sits below the Overview summary cards and follows the selected month. Switch between **Table** and **Chart** to compare **Spent so far**, **Planned**, and the amount left or over budget for every category. Positive expense refunds reduce spending; income, transfers, deleted transactions, and work cash flow are excluded. Card purchases use their purchase month. Select a category with recorded spending to open its personal transactions. Work outflows and receipts appear separately below the review.
+
+Budgets come from the existing medium-term expense plan. There is no second budget to maintain. If a planned expense has no category, its amount appears under **Plan items without a category** and remains in the personal planned total. Use **Assign categories** or **Edit budgets** to link expenses once; these category links apply to every month of the expense. Uncategorized actual spending stays separate until the transactions receive categories. No link is guessed from an expense name.
+
+For a category with one planned expense, edit its **Planned (R$)** amount directly in the table and press Enter. For a category with several expenses, choose **Edit expenses** to adjust its source amounts. **Edit budgets** also lets you adjust all of this month's expenses. Amount changes create an override for the selected month only, preserve repeating amounts and other months, and update the reserve forecast immediately. **Add budget** creates an expense for a category without an active plan, for the selected month only; use the medium-term plan if it should repeat. These edits use the existing local-save, backup, and Drive-sync mechanisms.
+
+The table can show unused categories; archived categories with activity remain visible. Categories with spending and no budget are explicitly marked over and not budgeted. The chart uses a shared signed currency scale, including net-refund categories. Amounts left are unspent budget in the records, rather than confirmed savings: bills may still arrive. The reserve forecast remains based on your plan, rather than a measured account balance.
 
 ## Medium-term planning
 

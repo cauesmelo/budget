@@ -1,48 +1,6 @@
-import { ArrowRight } from 'lucide-react';
-import { formatMoney, formatMonth } from '../lib/finance';
-import { getBudgetComparison, getCategorySpending } from '../lib/insights';
-import type { FinanceData } from '../lib/types';
+import { formatMoney } from '../lib/finance';
+import { getCategorySpending } from '../lib/insights';
 import { formatNumber } from '../lib/numbers';
-
-interface BudgetComparisonCardProps {
-  data: FinanceData;
-  month: string;
-  onPlan: () => void;
-  onImport: () => void;
-}
-
-export function BudgetComparisonCard({ data, month, onPlan, onImport }: BudgetComparisonCardProps) {
-  const comparison = getBudgetComparison(data, month);
-  const hasSpending = comparison?.hasRecordedExpenses ?? false;
-  const overPlan = !!comparison && comparison.remainingCents < 0;
-
-  return <section className="panel budget-comparison-card">
-    <div className="panel-header"><div>
-      <h2>Spending vs plan</h2>
-      <p>{formatMonth(month)} · recorded so far</p>
-    </div></div>
-    {!comparison ? <>
-      <p className="budget-comparison-empty">No spending plan for this month.</p>
-      <button type="button" className="text-button" onClick={onPlan}>Edit my plan <ArrowRight size={15} /></button>
-    </> : <>
-      <dl className="budget-comparison-values">
-        <div><dt>Planned spending</dt><dd>{formatMoney(comparison.plannedExpenseCents)}</dd></div>
-        {hasSpending && <div><dt>Recorded spending</dt><dd>{formatMoney(comparison.recordedExpenseCents)}</dd></div>}
-      </dl>
-      {hasSpending ? <>
-        <div className={`budget-comparison-result${overPlan ? ' over-plan' : ''}`}>
-          <strong>{formatMoney(Math.abs(comparison.remainingCents))}</strong>
-          <span>{overPlan ? 'over plan' : 'remaining vs plan'}</span>
-        </div>
-        <p className="budget-comparison-note">Based on imported and manual records so far, net of refunds.</p>
-        <button type="button" className="text-button" onClick={onPlan}>Review my plan <ArrowRight size={15} /></button>
-      </> : <>
-        <p className="budget-comparison-empty">No personal spending recorded yet.</p>
-        <button type="button" className="text-button" onClick={onImport}>Import a statement <ArrowRight size={15} /></button>
-      </>}
-    </>}
-  </section>;
-}
 
 interface CategoryBreakdownProps {
   categories: Record<string, number>;
