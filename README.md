@@ -26,6 +26,8 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 
 Repeated files preserve your edits and do not recreate deleted transactions. Identical transactions that appear more than once in the same file are preserved as separate occurrences. Matching depends on the date, original text, amount, account, billing month, and installment. Entries matching recorded details with a different amount appear under **Review possible repeats**. Review them or use **Skip this entry**; possible repeats are never removed automatically, because they can also be legitimate separate purchases. A manual billing-month override applies to all card files selected together.
 
+Before confirming, use the trash button in the preview’s **Exclude** column to leave out any row. Page through the preview to review all transactions. Each file has an **Undo exclusion** action that restores its most recent excluded row, including your reviewed fields. Counts update immediately, and confirmation is disabled when no rows remain selected. **Skip this entry** uses the same exclusion and undo behavior. Exclusions apply only to the current upload: saved transactions stay unchanged, and uploading the statement again can offer excluded rows again.
+
 ## Categories
 
 Use **Manage categories**, available in Transactions and Data and cloud, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.

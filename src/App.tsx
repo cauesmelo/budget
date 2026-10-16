@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronLeft, ChevronRight, Cloud, Download, FileSpreadsheet, FolderUp, LayoutDashboard, Leaf, ListFilter, LoaderCircle, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, TrendingUp, Upload, Wallet, X, Tag } from 'lucide-react';
-import type { FinanceData, ImportResult, PlanItem, Transaction, TransactionKind } from './lib/types';
+import type { FinanceData, PlanItem, Transaction, TransactionKind } from './lib/types';
 import { addMonths, applyImport, createEmptyData, formatMoney, formatMonth, getTransactionScope, mergeFinanceData, parseMoneyToCents, planAmountForMonth, previewDuplicateCount, projectReserve, summarizeMonth } from './lib/finance';
 import { loadData, saveData, serializeBackup, validateBackup } from './lib/storage';
 import { APP_ID } from './lib/identity';
@@ -21,6 +21,7 @@ import { ReserveGrowthChart } from './components/ReserveGrowthChart';
 import { TransactionModal } from './components/TransactionModal';
 import { createLocalSaveQueue } from './lib/localSave';
 import { prepareImportReview } from './lib/importReview';
+import { excludePreviewTransaction, undoPreviewExclusion, type PendingImport } from './lib/importPreview';
 import { getSimilarUncategorizedExpenses } from './lib/categoryLearning';
 import { connectDrive, disconnectDrive, isDriveConnected, syncDrive } from './lib/drive';
 
@@ -55,12 +56,13 @@ function WorkMetric({ label, incoming, outgoing, review }: { label: string; inco
   return <section className="metric work-metric" aria-label={`${label} cash flow`}><div className="metric-top"><span>{label} in / out</span><span className="metric-icon"><RefreshCw size={18} /></span></div><dl className="work-cash-flow"><div><dt><ArrowDownLeft size={13} /> In</dt><dd>{formatMoney(incoming)}</dd></div><div><dt><ArrowUpRight size={13} /> Out</dt><dd>{formatMoney(outgoing)}</dd></div></dl><button className="text-button" onClick={review}>Review {label} transactions <ArrowRight size={13} /></button><small>Excluded from personal income and expenses</small></section>;
 }
 
-function TxTable({ transactions, categories, data, update, remove, applyCategory }: { transactions: Transaction[]; categories: string[]; data: FinanceData; update: (id: string, patch: Partial<Transaction>) => void; remove?: (id: string) => void; applyCategory?: (id: string) => void }) {
+function TxTable({ transactions, categories, data, update, remove, removeMode = 'delete', applyCategory }: { transactions: Transaction[]; categories: string[]; data: FinanceData; update: (id: string, patch: Partial<Transaction>) => void; remove?: (id: string) => void; removeMode?: 'delete' | 'exclude'; applyCategory?: (id: string) => void }) {
   const workLabel = data.work?.label || 'Work';
-  return <div className="table-scroll"><table className="tx-table"><thead><tr><th>Date / reporting month</th><th>Transaction</th><th>Description</th><th>Category</th><th>Scope</th><th>Type</th><th className="right">Amount</th>{remove && <th />}</tr></thead><tbody>{transactions.map(tx => {
+  const exclude = removeMode === 'exclude';
+  return <div className="table-scroll"><table className="tx-table"><thead><tr><th>Date / reporting month</th><th>Transaction</th><th>Description</th><th>Category</th><th>Scope</th><th>Type</th><th className="right">Amount</th>{remove && <th className={exclude ? 'preview-row-action' : undefined}>{exclude ? 'Exclude' : ''}</th>}</tr></thead><tbody>{transactions.map(tx => {
     const scope = getTransactionScope(data, tx);
     const similar = applyCategory ? getSimilarUncategorizedExpenses(data, tx.id) : [];
-    return <tr key={tx.id}>
+    return <tr key={tx.id} data-transaction-id={tx.id}>
       <td className="date-cell">{tx.date.split('-').reverse().join('/')}<small>{tx.month} · {sourceNames[tx.source]}</small></td>
       <td className="original"><span title={tx.originalDescription}>{tx.originalDescription}</span>{tx.installment && <small>{tx.installment}</small>}</td>
       <td><input aria-label={`Description for ${tx.originalDescription}`} placeholder="Add description" value={tx.description} onChange={e => update(tx.id, { description: e.target.value })} /></td>
@@ -68,7 +70,16 @@ function TxTable({ transactions, categories, data, update, remove, applyCategory
       <td><select className={scope === 'work' ? 'work-scope' : ''} aria-label={`Scope for ${tx.originalDescription}`} value={scope} onChange={e => update(tx.id, { scope: e.target.value as 'personal' | 'work' })}><option value="personal">Personal</option><option value="work">{workLabel}</option></select></td>
       <td><select aria-label={`Type for ${tx.originalDescription}`} value={tx.kind} onChange={e => update(tx.id, { kind: e.target.value as TransactionKind })}>{Object.entries(kindNames).map(([kind, name]) => <option key={kind} value={kind}>{kind === 'income' && scope === 'work' ? 'Reimbursement' : name}</option>)}</select></td>
       <td className={`right amount ${tx.kind === 'income' ? 'green' : tx.kind === 'transfer' ? 'muted' : ''}`}>{formatMoney(tx.amountCents)}</td>
-      {remove && <td><button className="icon-button danger" title="Delete transaction" aria-label={`Delete ${tx.originalDescription}`} onClick={() => remove(tx.id)}><Trash2 size={16} /></button></td>}
+      {remove && <td className={exclude ? 'preview-row-action' : undefined}><button type="button" className="icon-button danger" title={exclude ? 'Exclude from this import' : 'Delete transaction'} aria-label={exclude ? `Exclude ${tx.originalDescription} from import` : `Delete ${tx.originalDescription}`} onClick={event => {
+        const row = event.currentTarget.closest('tr');
+        const adjacent = row?.nextElementSibling ?? row?.previousElementSibling;
+        const preview = event.currentTarget.closest('.preview');
+        remove(tx.id);
+        if (exclude) requestAnimationFrame(() => {
+          const nextButton = adjacent?.isConnected ? adjacent.querySelector<HTMLButtonElement>('.preview-row-action button') : null;
+          (nextButton ?? preview?.querySelector<HTMLButtonElement>('[data-undo-exclusion]'))?.focus({ preventScroll: true });
+        });
+      }}><Trash2 size={16} /></button></td>}
     </tr>;
   })}</tbody></table></div>;
 }
@@ -89,7 +100,8 @@ export default function App() {
   const [editingAmount, setEditingAmount] = useState(false);
   const [undo, setUndo] = useState<{ kind: 'transaction' | 'plan'; id: string; name: string; deletedAt: string } | null>(null);
   const [focusPlanId, setFocusPlanId] = useState('');
-  const [pending, setPending] = useState<{ name: string; result: ImportResult; learnedCount: number }[]>([]);
+  const [pending, setPending] = useState<PendingImport[]>([]);
+  const [previewOffsets, setPreviewOffsets] = useState<Record<number, number>>({});
   const [cardMonth, setCardMonth] = useState(today().slice(0, 7));
   const [overrideCardMonth, setOverrideCardMonth] = useState(false);
   const [query, setQuery] = useState('');
@@ -363,6 +375,21 @@ export default function App() {
     });
   }, [data, pending]);
 
+  function excludePendingRow(fileIndex: number, id: string) {
+    setPending(current => current.map((item, index) => index === fileIndex ? excludePreviewTransaction(item, id) : item));
+  }
+
+  function undoPendingRow(fileIndex: number, trigger: HTMLButtonElement) {
+    const restoredId = pending[fileIndex]?.excluded?.at(-1)?.transaction.id;
+    const preview = trigger.closest('.preview');
+    setPending(current => current.map((item, index) => index === fileIndex ? undoPreviewExclusion(item) : item));
+    requestAnimationFrame(() => {
+      if (trigger.isConnected) return;
+      const visibleRows = Array.from(preview?.querySelectorAll<HTMLTableRowElement>('[data-transaction-id]') ?? []);
+      const restoredRow = visibleRows.find(row => row.dataset.transactionId === restoredId) ?? visibleRows[0];
+      restoredRow?.querySelector<HTMLButtonElement>('.preview-row-action button')?.focus({ preventScroll: true });
+    });
+  }
 
   async function importFiles(files: FileList | File[]) {
     setBusy(true); setError(''); filesToRetry.current = Array.from(files);
@@ -376,11 +403,12 @@ export default function App() {
         const reviewed = prepareImportReview(dataRef.current, { ...result, transactions, warnings: [...result.warnings, ...(skipped ? [`${formatNumber(skipped)} transactions before ${formatMonth(startMonth!)} were excluded.`] : [])] });
         imports.push({ name: file.name, result: reviewed.result, learnedCount: reviewed.learnedCount });
       }
-      setPending(imports); setPage('import');
+      setPending(imports); setPreviewOffsets({}); setPage('import');
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not read this file.'); }
     finally { setBusy(false); if (fileInput.current) fileInput.current.value = ''; }
   }
   function confirmImports() {
+    if (!pending.some(item => item.result.transactions.length > 0)) return;
     let next = dataRef.current; let count = 0;
     for (const item of pending) { const before = next.transactions.length; next = applyImport(next, item.result, item.name); count += next.transactions.length - before; }
     if (!change(() => next)) return;
@@ -459,15 +487,24 @@ export default function App() {
         <div className="import-layout"><section className="panel import-panel"><div className="panel-header"><div><h2>Import files</h2><p>Files are read on this computer</p></div><FileSpreadsheet size={23} /></div><p className="import-detection-note">Card billing months are detected from each statement automatically.</p><details className="import-month-options"><summary>Set a card month manually</summary><label className="import-month-toggle"><input type="checkbox" checked={overrideCardMonth} onChange={event => setOverrideCardMonth(event.target.checked)} />Override the detected billing month</label><label className="field"><span>Card billing month</span><input aria-label="Card billing month override" type="month" disabled={!overrideCardMonth} min={startMonth} value={cardMonth} onChange={event => event.target.value && (!startMonth || event.target.value >= startMonth) && setCardMonth(event.target.value)} /><small>Use this only when the statement month is missing or incorrect. It applies to all card files selected together.</small></label>{filesToRetry.current.length > 0 && <Button secondary disabled={busy} onClick={() => void importFiles(filesToRetry.current)}>Retry selected files</Button>}</details><div className="dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) void importFiles(e.dataTransfer.files); }}><div className="upload-icon"><Upload size={27} /></div><h3>Start with your files.</h3><p>Drag files here or choose them from your computer.</p><Button onClick={() => fileInput.current?.click()} disabled={busy}>{busy ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />} Choose files</Button><small>.xls and .xlsx · account and card</small><input ref={fileInput} type="file" multiple accept=".xls,.xlsx" className="hidden" onChange={e => e.target.files && void importFiles(e.target.files)} /></div></section><section className="panel import-guide"><span className="pill subdued">HOW IT WORKS</span><h2>Less typing.<br />More clarity.</h2><div className="guide-step"><span>01</span><div><h3>Export from Itaú</h3><p>Download your account and card statements as Excel files.</p></div></div><div className="guide-step"><span>02</span><div><h3>Review before importing</h3><p>Dates, amounts, transaction details, and installments are filled in. Card payments and investment transfers are separated from spending.</p></div></div><div className="guide-step"><span>03</span><div><h3>Add your context</h3><p>Add a category and description. You can also correct a transaction’s type.</p></div></div><div className="guide-foot"><ShieldCheck size={18} /><span>Repeated files preserve your edits and do not create duplicate records.</span></div></section></div>
         {importPreviews.map((item, index) => {
           const reportingMonths = [...new Set(item.result.transactions.map(transaction => transaction.month))].sort();
+          const previewOffset = Math.min(previewOffsets[index] ?? 0, Math.max(0, Math.floor((item.result.transactions.length - 1) / 20) * 20));
+          const excludedCount = item.excluded?.length ?? 0;
           return <section className="panel preview" key={`${item.name}-${index}`}>
             <div className="panel-header"><div><h2>{item.name}</h2><p>{formatNumber(item.newCount)} new · {formatNumber(item.duplicates)} already imported</p><p className="import-period">{item.result.source === 'card' ? 'Card billing month' : 'Reporting period'}: {reportingMonths.length ? reportingMonths.map(value => formatMonth(value)).join(', ') : 'No eligible transactions'}</p></div><span className="pill subdued">PREVIEW</span></div>
-            {item.learnedCount > 0 && <p className="import-learning-note">Prefilled categories or descriptions for {formatNumber(item.learnedCount)} transactions from your previous entries. Review them before importing.</p>}
+            {excludedCount > 0 && <div className="import-exclusion-status" role="status"><span>{formatNumber(excludedCount)} {excludedCount === 1 ? 'row excluded' : 'rows excluded'} from this import.</span><button type="button" className="text-button" data-undo-exclusion onClick={event => undoPendingRow(index, event.currentTarget)}>Undo exclusion</button></div>}
+            {item.learnedCount > 0 && <p className="import-learning-note">{excludedCount
+              ? 'Categories or descriptions were prefilled from your previous entries. Review the remaining rows before importing.'
+              : `Prefilled categories or descriptions for ${formatNumber(item.learnedCount)} ${item.learnedCount === 1 ? 'transaction' : 'transactions'} from your previous entries. Review them before importing.`}</p>}
             {item.result.warnings.map((warning, warningIndex) => <div className="alert warning" key={warningIndex}>{warning}</div>)}
-            {item.possibleDuplicates.length > 0 && <div className="possible-duplicates"><h3>Review possible repeats</h3><p>These match recorded transaction details but have different amounts. They may be updated charges or separate purchases; nothing is removed automatically.</p>{item.possibleDuplicates.map(possible => <div className="possible-duplicate-row" key={possible.incoming.id}><div><strong>{possible.incoming.originalDescription}</strong><small>New {formatMoney(possible.incoming.amountCents)} · recorded {possible.existing.map(existing => formatMoney(existing.amountCents)).join(', ')}</small></div><button className="text-button" onClick={() => setPending(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, result: { ...entry.result, transactions: entry.result.transactions.filter(transaction => transaction.id !== possible.incoming.id) } } : entry))}>Skip this entry</button></div>)}</div>}
-            {item.result.transactions.length > 0 && <><TxTable transactions={item.result.transactions.slice(0, 20)} categories={categories} data={data} update={(id, patch) => setPending(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, result: { ...entry.result, transactions: entry.result.transactions.map(transaction => transaction.id === id ? { ...transaction, ...patch } : transaction) } } : entry))} /><p className="footnote">Preview of the first {formatNumber(Math.min(20, item.result.transactions.length))} records. Review every record in Transactions after importing.</p></>}
+            {item.possibleDuplicates.length > 0 && <div className="possible-duplicates"><h3>Review possible repeats</h3><p>These match recorded transaction details but have different amounts. They may be updated charges or separate purchases; nothing is removed automatically.</p>{item.possibleDuplicates.map(possible => <div className="possible-duplicate-row" key={possible.incoming.id}><div><strong>{possible.incoming.originalDescription}</strong><small>New {formatMoney(possible.incoming.amountCents)} · recorded {possible.existing.map(existing => formatMoney(existing.amountCents)).join(', ')}</small></div><button className="text-button" onClick={() => excludePendingRow(index, possible.incoming.id)}>Skip this entry</button></div>)}</div>}
+            {item.result.transactions.length > 0 ? <>
+              <TxTable transactions={item.result.transactions.slice(previewOffset, previewOffset + 20)} categories={categories} data={data} update={(id, patch) => setPending(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, result: { ...entry.result, transactions: entry.result.transactions.map(transaction => transaction.id === id ? { ...transaction, ...patch } : transaction) } } : entry))} remove={id => excludePendingRow(index, id)} removeMode="exclude" />
+              <div className="pagination" role="group" aria-label={`Preview pages for ${item.name}`}><span>{formatNumber(previewOffset + 1)}–{formatNumber(Math.min(previewOffset + 20, item.result.transactions.length))} of {formatNumber(item.result.transactions.length)}</span><button type="button" className="button secondary" aria-label={`Previous preview page for ${item.name}`} disabled={!previewOffset} onClick={() => setPreviewOffsets(current => ({ ...current, [index]: Math.max(0, previewOffset - 20) }))}>Previous</button><button type="button" className="button secondary" aria-label={`Next preview page for ${item.name}`} disabled={previewOffset + 20 >= item.result.transactions.length} onClick={() => setPreviewOffsets(current => ({ ...current, [index]: previewOffset + 20 }))}>Next</button></div>
+              <p className="footnote">Review the rows before confirming. Use Exclude to leave a row out of this import.</p>
+            </> : <p className="import-preview-empty">{excludedCount ? 'All rows are excluded. Use Undo exclusion to restore the last row.' : 'No eligible transactions in this file.'}</p>}
           </section>;
         })}
-        {!!pending.length && <div className="import-actions"><Button secondary onClick={() => setPending([])}>Cancel</Button><Button onClick={confirmImports}><Check size={17} /> Confirm import</Button></div>}
+        {!!pending.length && <div className="import-actions"><Button secondary onClick={() => setPending([])}>Cancel</Button><Button disabled={!pending.some(item => item.result.transactions.length > 0)} onClick={confirmImports}><Check size={17} /> Confirm import</Button></div>}
       </>}
 
       {page === 'plan' && <>

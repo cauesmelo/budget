@@ -224,6 +224,13 @@ input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .import-month-toggle input{width:16px;height:16px;accent-color:var(--green);flex-shrink:0}
 .import-period{font-weight:600!important;color:var(--ink)!important;margin-top:8px!important}
 .import-learning-note{padding:12px 14px;background:#e7f0df;border:1px solid var(--border);border-radius:7px;font-size:12px!important;line-height:1.8!important;margin:0 0 16px!important}
+.import-exclusion-status{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:11px 14px;margin-bottom:16px;border:1px solid var(--border);border-radius:7px;background:var(--surface-soft);color:var(--text-secondary);font-size:12px}
+.import-exclusion-status .text-button{min-height:28px}
+.preview .tx-table .preview-row-action{position:sticky;right:0;text-align:center;box-shadow:-1px 0 var(--table-line)}
+.preview .tx-table th.preview-row-action{background:var(--table-head);z-index:2}
+.preview .tx-table td.preview-row-action{background:inherit;z-index:1}
+.preview-row-action .icon-button{width:32px;height:32px;border:1px solid var(--control-border);background:var(--surface);color:#9c4d3f}
+.import-preview-empty{padding:16px 0}
 .possible-duplicates{border:1px solid #d8c79b;background:#faf6e9;padding:16px;border-radius:8px;margin-bottom:20px}
 .possible-duplicates h3{font-size:14px;font-weight:600;margin:0 0 8px}
 .possible-duplicates>p{font-size:12px;line-height:1.8;margin-bottom:10px}
