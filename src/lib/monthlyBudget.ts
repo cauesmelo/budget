@@ -1,6 +1,6 @@
-import { assertAvailableCategory, categoryNameKey, listCategories, resolveCategoryName } from './categories';
+import { categoryNameKey, listCategories, resolveCategoryName } from './categories';
 import { getTransactionScope, isReportableTransaction, isValidMonth, planAmountForMonth } from './finance';
-import { appendPlanItem, getOrderedPlanItems } from './planOrder';
+import { getOrderedPlanItems } from './planOrder';
 import { getTransactionReportingMonth } from './transactionMonth';
 import type { FinanceData } from './types';
 
@@ -39,29 +39,6 @@ function safeCents(value: number): number {
 
 function emptyRow(key: string, kind: MonthlyBudgetRow['kind'], label: string, category = '', archived = false): MonthlyBudgetRow {
   return { key, kind, category, label, plannedCents: 0, spentCents: 0, remainingCents: 0, planItemIds: [], transactionCount: 0, archived };
-}
-
-/** Add a category budget for this month only, using the existing expense plan as the single source. */
-export function addMonthlyBudgetExpense(data: FinanceData, category: string, month: string, amountCents: number, now = new Date()): FinanceData {
-  if (!isValidMonth(month)) throw new Error('Invalid month.');
-  if (data.reporting && month < data.reporting.startMonth) throw new Error('Choose a month within the reporting period.');
-  if (!Number.isFinite(now.getTime())) throw new Error('Invalid date.');
-  const name = resolveCategoryName(data, category).trim();
-  if (!name) throw new Error('Select an available category.');
-  assertAvailableCategory(data, name);
-  if (safeCents(amountCents) <= 0) throw new Error('Enter a budget amount greater than zero.');
-  const key = categoryNameKey(name);
-  const hasActivePlan = data.planItems.some(item => item.kind === 'expense' && !item.deletedAt
-    && item.startMonth <= month && (!item.endMonth || item.endMonth >= month)
-    && categoryNameKey(resolveCategoryName(data, item.category)) === key);
-  if (hasActivePlan) throw new Error('This category already has planned expenses for the month. Edit those items instead.');
-  const stamp = now.toISOString();
-  const next = appendPlanItem(data, {
-    id: crypto.randomUUID(), name, category: name, kind: 'expense', behavior: 'monthly',
-    defaultAmountCents: 0, amounts: { [month]: amountCents }, startMonth: month, updatedAt: stamp,
-  }, stamp);
-  getMonthlyBudgetReview(next, month);
-  return next;
 }
 
 /** Compare the same expense plan used by projections with personal spending net of refunds. */

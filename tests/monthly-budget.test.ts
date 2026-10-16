@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deleteCategory, renameCategory } from '../src/lib/categories';
 import { createEmptyData, mergeFinanceData, planAmountForMonth, summarizeMonth } from '../src/lib/finance';
-import { addMonthlyBudgetExpense, getMonthlyBudgetReview } from '../src/lib/monthlyBudget';
+import { getMonthlyBudgetReview } from '../src/lib/monthlyBudget';
 import { serializeBackup, validateBackup } from '../src/lib/storage';
 import type { Category, FinanceData, PlanItem, Transaction } from '../src/lib/types';
 
@@ -12,82 +12,6 @@ const plan = (id: string, patch: Partial<PlanItem> = {}): PlanItem => ({
   amounts: {}, startMonth: '2032-10', updatedAt: NOW, ...patch,
 });
 
-describe('adding a monthly category budget', () => {
-  it('adds a canonical expense plan for this month only and preserves all existing records', () => {
-    const data = renameCategory(fixture(), 'food', 'Dining', new Date(NOW));
-    data.planItems = [plan('home', { category: 'Home' })];
-    data.planOrder = { ids: ['home'], updatedAt: NOW };
-    const before = structuredClone(data);
-    const stamp = new Date('2032-10-16T12:00:00.000Z');
-    const next = addMonthlyBudgetExpense(data, 'Food', '2032-10', 12_345, stamp);
-    const added = next.planItems.find(item => item.id !== 'home')!;
-    expect(added).toMatchObject({
-      name: 'Dining', category: 'Dining', kind: 'expense', behavior: 'monthly',
-      defaultAmountCents: 0, amounts: { '2032-10': 12_345 }, startMonth: '2032-10', updatedAt: stamp.toISOString(),
-    });
-    expect(added.id).toBeTruthy();
-    expect(added.endMonth).toBeUndefined();
-    expect(planAmountForMonth(added, '2032-09')).toBe(0);
-    expect(planAmountForMonth(added, '2032-10')).toBe(12_345);
-    expect(planAmountForMonth(added, '2032-11')).toBe(0);
-    expect(next.planOrder?.ids).toEqual(['home', added.id]);
-    expect(next.updatedAt).toBe(stamp.toISOString());
-    expect(next.planItems[0]).toEqual(data.planItems[0]);
-    expect(getMonthlyBudgetReview(next, '2032-10').rows.find(row => row.category === 'Dining')).toMatchObject({ plannedCents: 12_345, planItemIds: [added.id] });
-    expect(data).toEqual(before);
-  });
-
-  it('rejects an existing active assigned expense even when its budget is explicitly zero', () => {
-    const data = renameCategory(fixture(), 'food', 'Dining', new Date(NOW));
-    data.planItems = [plan('zero', { category: 'Food', amounts: { '2032-10': 0 } })];
-    expect(() => addMonthlyBudgetExpense(data, 'Dining', '2032-10', 1_000)).toThrow('already has planned expenses');
-  });
-
-  it('allows adding a budget when matching records are deleted, outside their interval, or another kind', () => {
-    const data = fixture();
-    data.planItems = [
-      plan('deleted', { deletedAt: NOW }), plan('future', { startMonth: '2032-11' }),
-      plan('past', { startMonth: '2032-01', endMonth: '2032-09' }),
-      plan('income', { kind: 'income' }), plan('saving', { kind: 'contribution' }),
-    ];
-    const next = addMonthlyBudgetExpense(data, 'Food', '2032-10', 1_000, new Date(NOW));
-    expect(getMonthlyBudgetReview(next, '2032-10').plannedCents).toBe(1_000);
-    expect(next.planItems).toHaveLength(6);
-  });
-
-  it('round-trips the existing plan shape through backups and merges without losing the month amount', () => {
-    const data = fixture();
-    const next = addMonthlyBudgetExpense(data, 'Food', '2032-10', 12_345, new Date(NOW));
-    const restored = validateBackup(serializeBackup(next));
-    const merged = mergeFinanceData(restored, data);
-    const added = next.planItems[0];
-    expect(restored.planItems.find(item => item.id === added.id)).toEqual(added);
-    expect(merged.planItems.find(item => item.id === added.id)).toEqual(added);
-    expect(getMonthlyBudgetReview(merged, '2032-10').plannedCents).toBe(12_345);
-    expect(getMonthlyBudgetReview(merged, '2032-11').plannedCents).toBe(0);
-  });
-
-  it('requires a live available category, safe positive amount, valid date, and an eligible month', () => {
-    const data = fixture();
-    data.categories.push(category('archived', 'Archived', { archivedAt: NOW }), category('deleted', 'Deleted', { deletedAt: NOW }));
-    data.reporting = { startMonth: '2032-10', resetId: 'example-reset', updatedAt: NOW };
-    for (const name of ['', '   ', 'Unknown', 'Archived', 'Deleted']) expect(() => addMonthlyBudgetExpense(data, name, '2032-10', 1_000)).toThrow('category');
-    expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-13', 1_000)).toThrow('Invalid month');
-    expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-09', 1_000)).toThrow('reporting period');
-    for (const amount of [0, -1]) expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-10', amount)).toThrow('greater than zero');
-    for (const amount of [0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-10', amount)).toThrow('supported monetary range');
-    expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-10', 1_000, new Date(NaN))).toThrow('Invalid date');
-  });
-
-  it('checks that a new category budget cannot overflow the current month totals or remaining amount', () => {
-    const data = fixture();
-    data.planItems = [plan('home', { category: 'Home', defaultAmountCents: Number.MAX_SAFE_INTEGER })];
-    expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-10', 1)).toThrow('supported monetary range');
-    data.planItems = [];
-    data.transactions = [transaction('refund', Number.MAX_SAFE_INTEGER, { kind: 'expense' })];
-    expect(() => addMonthlyBudgetExpense(data, 'Food', '2032-10', 1)).toThrow('supported monetary range');
-  });
-});
 const transaction = (id: string, amountCents: number, patch: Partial<Transaction> = {}): Transaction => ({
   id, fingerprint: id, date: '2032-10-05', month: '2032-10', amountCents,
   kind: amountCents > 0 ? 'income' : 'expense', source: 'bank', account: 'Example account',
@@ -100,6 +24,29 @@ function fixture(): FinanceData {
 }
 
 describe('monthly category budget review', () => {
+  it('preserves existing month-only expenses in reviews, backups, and merges without changing their source records', () => {
+    const data = fixture();
+    const expense = plan('month-only', {
+      behavior: 'monthly', defaultAmountCents: 0, amounts: { '2032-10': 12_345 },
+    });
+    data.planItems = [expense];
+    data.planOrder = { ids: [expense.id], updatedAt: NOW };
+    const before = structuredClone(data);
+    expect(planAmountForMonth(expense, '2032-09')).toBe(0);
+    expect(planAmountForMonth(expense, '2032-10')).toBe(12_345);
+    expect(planAmountForMonth(expense, '2032-11')).toBe(0);
+    const review = getMonthlyBudgetReview(data, '2032-10');
+    expect(review.rows.find(row => row.category === 'Food')).toMatchObject({ plannedCents: 12_345, planItemIds: [expense.id] });
+    expect(getMonthlyBudgetReview(data, '2032-11').plannedCents).toBe(0);
+    expect(data).toEqual(before);
+    const restored = validateBackup(serializeBackup(data));
+    const merged = mergeFinanceData(restored, fixture());
+    expect(restored.planItems.find(item => item.id === expense.id)).toEqual(expense);
+    expect(merged.planItems.find(item => item.id === expense.id)).toEqual(expense);
+    expect(getMonthlyBudgetReview(merged, '2032-10').plannedCents).toBe(12_345);
+    expect(getMonthlyBudgetReview(merged, '2032-11').plannedCents).toBe(0);
+  });
+
   it('lists every active category and keeps a month without records explicit', () => {
     const data = fixture();
     const review = getMonthlyBudgetReview(data, '2032-10');

@@ -14,12 +14,14 @@ interface PlanGridCallbacks {
 interface PlanGridProps extends PlanGridCallbacks {
   items: PlanItem[];
   months: ProjectionMonth[];
+  selectedMonth?: string;
   children?: ReactNode;
 }
 
 interface PlanGridRowProps extends PlanGridCallbacks {
   item: PlanItem;
   months: ProjectionMonth[];
+  selectedMonth?: string;
   editableName?: boolean;
   editableMonthly?: boolean;
   removable?: boolean;
@@ -28,7 +30,7 @@ interface PlanGridRowProps extends PlanGridCallbacks {
 }
 
 export function PlanGridRow({
-  item, months, onPatch, onMonthly, onMonth, onMove,
+  item, months, selectedMonth, onPatch, onMonthly, onMonth, onMove,
   editableName = true, editableMonthly = true, removable = true,
   canMoveUp = false, canMoveDown = false,
 }: PlanGridRowProps) {
@@ -54,7 +56,7 @@ export function PlanGridRow({
       : formatMoney(monthlyAmount)}</td>
     {months.map(({ month }) => {
       const edited = Object.hasOwn(item.amounts, month);
-      return <td key={month} className={edited ? 'overridden' : undefined}>
+      return <td key={month} data-plan-month={month} className={[edited ? 'overridden' : '', month === selectedMonth ? 'plan-review-month' : ''].filter(Boolean).join(' ') || undefined}>
         <div className="override-cell">
           <MoneyInput label={`${item.name} in ${month}`} value={planAmountForMonth(item, month)} onChange={amount => onMonth(item.id, month, Math.max(0, amount))} />
           {edited && <button className="reset-month" title="Remove month edit" aria-label={`Remove month edit for ${item.name} ${month}`} onClick={() => {
@@ -69,7 +71,7 @@ export function PlanGridRow({
   </tr>;
 }
 
-export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, onMove, children }: PlanGridProps) {
+export function PlanGrid({ items, months, selectedMonth, onPatch, onMonthly, onMonth, onMove, children }: PlanGridProps) {
   const [moveStatus, setMoveStatus] = useState('');
   function move(id: string, direction: 'up' | 'down') {
     if (!onMove?.(id, direction)) return false;
@@ -78,9 +80,9 @@ export function PlanGrid({ items, months, onPatch, onMonthly, onMonth, onMove, c
   }
   return <><span className="plan-reorder-status" role="status" aria-live="polite">{moveStatus}</span><p className="table-swipe-hint">Swipe horizontally to see the months.</p><div className="table-scroll">
     <table className="plan-table simple-plan-table">
-      <thead><tr><th>Item</th><th>Monthly (R$)</th>{months.map(({ month }) => <th key={month}>{formatMonth(month)}</th>)}<th /></tr></thead>
+      <thead><tr><th>Item</th><th>Monthly (R$)</th>{months.map(({ month }) => <th key={month} className={month === selectedMonth ? 'plan-review-month' : undefined}>{formatMonth(month)}{month === selectedMonth && <small>Review month</small>}</th>)}<th /></tr></thead>
       <tbody>
-        {items.map((item, index) => <PlanGridRow key={item.id} item={item} months={months} onPatch={onPatch} onMonthly={onMonthly} onMonth={onMonth} onMove={onMove && items.length > 1 ? move : undefined} canMoveUp={index > 0} canMoveDown={index < items.length - 1} />)}
+        {items.map((item, index) => <PlanGridRow key={item.id} item={item} months={months} selectedMonth={selectedMonth} onPatch={onPatch} onMonthly={onMonthly} onMonth={onMonth} onMove={onMove && items.length > 1 ? move : undefined} canMoveUp={index > 0} canMoveDown={index < items.length - 1} />)}
         {children}
       </tbody>
     </table>

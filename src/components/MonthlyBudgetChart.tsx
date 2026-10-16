@@ -19,7 +19,7 @@ export function MonthlyBudgetChart({ rows, onReview }: {
 }) {
   const visibleRows = rows.filter(row => row.plannedCents !== 0 || row.spentCents !== 0);
   if (visibleRows.length === 0) {
-    return <div className="monthly-budget-chart-empty">Add a category budget or import spending to see the comparison.</div>;
+    return <div className="monthly-budget-chart-empty">Add expenses to your medium-term plan or import spending to see the comparison.</div>;
   }
   const minimum = Math.min(0, ...visibleRows.map(row => row.spentCents));
   const maximum = Math.max(0, ...visibleRows.flatMap(row => [row.plannedCents, row.spentCents]));

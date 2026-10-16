@@ -15,12 +15,14 @@ import { IncomeSettings } from './components/IncomeSettings';
 import { DecimalInput } from './components/DecimalInput';
 import { formatMoneyAmount, formatNumber } from './lib/numbers';
 import { PlanGrid } from './components/PlanGrid';
+import { PlanCategoryLinks } from './components/PlanCategoryLinks';
+import './components/PlanReviewContext.css';
 import { setPlanMonthAmount, setPlanMonthlyAmount } from './lib/planning';
 import { appendPlanItem, getOrderedPlanItems, movePlanItem } from './lib/planOrder';
 import { PlanningAssumptions, PlanningMetrics, PlanningIndicatorsTable } from './components/PlanningInsights';
 import { CategoryBreakdown } from './components/OverviewInsights';
 import { MonthlyBudgetReview } from './components/MonthlyBudgetReview';
-import { addMonthlyBudgetExpense, type MonthlyBudgetRow } from './lib/monthlyBudget';
+import type { MonthlyBudgetRow } from './lib/monthlyBudget';
 import { ReserveGrowthChart } from './components/ReserveGrowthChart';
 import { TransactionModal } from './components/TransactionModal';
 import { createLocalSaveQueue } from './lib/localSave';
@@ -129,6 +131,9 @@ export default function App() {
   const [addAmount, setAddAmount] = useState('');
   const [planOffset, setPlanOffset] = useState(0);
   const [planningMonth, setPlanningMonth] = useState('');
+  const [planReviewMonth, setPlanReviewMonth] = useState('');
+  const [planCategoryLinksOpen, setPlanCategoryLinksOpen] = useState(false);
+  const [planFocusRequest, setPlanFocusRequest] = useState<{ month: string; linkCategories: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const backupInput = useRef<HTMLInputElement>(null);
   const channel = useRef<BroadcastChannel | null>(null);
@@ -196,6 +201,21 @@ export default function App() {
     return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hidden); };
   }, []);
   useEffect(() => { window.scrollTo(0, 0); setEditingAmount(false); const frame = requestAnimationFrame(() => { if (page !== 'review') heading.current?.focus({ preventScroll: true }); }); return () => cancelAnimationFrame(frame); }, [page]);
+  useEffect(() => {
+    if (page !== 'plan' || !planFocusRequest) return;
+    const frame = requestAnimationFrame(() => {
+      const links = document.querySelector('[data-plan-category-links]');
+      const expenses = document.querySelector('.plan-table-panel');
+      const target = planFocusRequest.linkCategories
+        ? links?.querySelector<HTMLElement>('.category-trigger.unassigned') ?? links?.querySelector<HTMLElement>('[role="combobox"]') ?? links?.querySelector<HTMLElement>('summary')
+        : expenses?.querySelector<HTMLElement>(`[data-plan-month="${planFocusRequest.month}"] input`) ?? expenses?.querySelector<HTMLElement>('h2');
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      setPlanFocusRequest(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [page, planFocusRequest]);
+  useEffect(() => { if (page !== 'plan') setPlanReviewMonth(''); }, [page]);
   useEffect(() => { if (!undo) return; const timer = setTimeout(() => setUndo(null), 10000); return () => clearTimeout(timer); }, [undo]);
   useEffect(() => {
     if (!focusPlanId) return;
@@ -240,7 +260,11 @@ export default function App() {
     const nextCategory = current?.name ?? '';
     if (nextCategory !== addCategory) setAddCategory(nextCategory);
   }, [data.categories, addCategory]);
-  useEffect(() => { setPlanOffset(0); }, [data.settings.horizonMonths, data.settings.reserveStartMonth]);
+  useEffect(() => {
+    const months = Array.from({ length: data.settings.horizonMonths }, (_, index) => addMonths(data.settings.reserveStartMonth, index));
+    const reviewIndex = months.indexOf(planReviewMonth);
+    setPlanOffset(reviewIndex < 0 ? 0 : Math.floor(reviewIndex / 6) * 6);
+  }, [data.settings.horizonMonths, data.settings.reserveStartMonth, planReviewMonth]);
   useEffect(() => { if (!notification) return; const t = setTimeout(() => setNotification(''), 6000); return () => clearTimeout(t); }, [notification]);
 
   function change(edit: (current: FinanceData) => FinanceData) {
@@ -365,6 +389,14 @@ export default function App() {
     const index = projection.findIndex(row => row.month === nextMonth);
     if (index >= 0) setPlanOffset(Math.floor(index / 6) * 6);
   }
+  function openReviewedPlan(linkCategories = false) {
+    selectPlanningMonth(month);
+    setPlanReviewMonth(month);
+    setPlanCategoryLinksOpen(linkCategories);
+    setPlanFocusRequest({ month, linkCategories });
+    setPage('plan');
+  }
+  const reviewMonthInHorizon = projection.some(row => row.month === planReviewMonth);
   const horizonPlanItems = getOrderedPlanItems(data).filter(item => !item.deletedAt && item.startMonth <= projection.at(-1)!.month && (!item.endMonth || item.endMonth >= projection[0].month));
   const expensePlanItems = horizonPlanItems.filter(item => item.kind === 'expense');
   const targetPlanItems = horizonPlanItems.filter(item => item.kind === 'contribution');
@@ -502,7 +534,7 @@ export default function App() {
       {page === 'overview' && <>
         {categoryReviewQueue.length > 0 && <div className="category-review-banner"><span><Tag size={15} />{formatNumber(categoryReviewQueue.length)} {categoryReviewQueue.length === 1 ? 'transaction needs' : 'transactions need'} a category · all months</span><button className="text-button" onClick={() => setPage('review')}>Review categories <ArrowRight size={14} /></button></div>}
         <div className="metrics"><Metric label="Monthly income" value={hasMonthlyIncome ? formatMoney(summary.incomeCents) : 'Not set'} detail={hasMonthlyIncome ? `${formatMonth(month)} · fixed take-home income` : 'Set your monthly take-home income in Settings'} icon={<ArrowDownLeft size={18} />} action={<button className="text-button metric-income-action" onClick={() => setPage('settings')}>{hasMonthlyIncome ? 'Edit income' : 'Set monthly income'} <ArrowRight size={13} /></button>} /><Metric label="Spending so far" value={formatMoney(summary.expenseCents)} detail="Personal spending, net of refunds" icon={<ArrowUpRight size={18} />} /><Metric label="Remaining this month" value={hasMonthlyIncome ? formatMoney(summary.netCents) : '—'} detail={!hasMonthlyIncome ? 'Set monthly income to calculate what remains' : savings === null ? 'Monthly income minus spending so far' : `${formatNumber(savings)}% of monthly income left after spending`} icon={<Wallet size={18} />} tint /><WorkMetric label={workLabel} incoming={summary.workInCents} outgoing={summary.workOutCents} review={() => reviewTransactions('work')} /></div>
-        <MonthlyBudgetReview data={data} month={month} onAmount={editPlanMonth} onCategory={(id, category) => patchPlan(id, { category })} onAdd={(category, budgetMonth, amount) => change(current => addMonthlyBudgetExpense(current, category, budgetMonth, amount))} onReview={reviewBudgetSpending} onPlan={() => setPage('plan')} onCategories={() => setPage('settings')} />
+        <MonthlyBudgetReview data={data} month={month} onReview={reviewBudgetSpending} onPlan={openReviewedPlan} />
         {activeTx.length > 0 && summary.count === 0 && <div className="month-data-note">No personal transactions recorded for {formatMonth(month)}. Import statements to build this month’s picture.</div>}
         {!activeTx.length && <div className="welcome"><div><span className="pill">LET’S GET STARTED</span><h2>Start with a clear picture.</h2><p>Import your account and card statements, then add categories and descriptions as you go.</p><Button onClick={() => setPage('import')}>Import my files <ArrowRight size={17} /></Button></div><div className="welcome-art"><FileSpreadsheet size={72} strokeWidth={1} /><span className="art-dot" /></div></div>}
         <div className="charts-grid"><section className="panel"><div className="panel-header"><div><h2>Income and spending</h2><p>{hasMonthlyIncome ? 'Your fixed monthly income and recorded personal spending' : 'Set monthly income in Settings to compare it with spending'}</p></div><span className="pill subdued">MONTHLY</span></div><div className="chart-legend">{hasMonthlyIncome && <span><i style={{ background: 'var(--green)' }} />Monthly income</span>}<span><i style={{ background: 'var(--chart-spending)' }} />Expenses</span></div><div className="chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthlyHistory} margin={{ top: 10, right: 5, left: 8, bottom: 0 }}><CartesianGrid strokeDasharray="3 4" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="month" tickFormatter={m => formatMonth(m).split(' ')[0]} axisLine={false} tickLine={false} tick={chartTick} dy={8} /><YAxis tickFormatter={moneyAxis} axisLine={false} tickLine={false} width="auto" tick={chartTick} /><Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} formatter={v => formatMoney(Number(v))} labelFormatter={m => formatMonth(String(m))} />{hasMonthlyIncome && <Bar isAnimationActive={false} dataKey="incomeCents" name="Monthly income" fill="var(--green)" radius={[5, 5, 0, 0]} maxBarSize={23} />}<Bar isAnimationActive={false} dataKey="expenseCents" name="Expenses" fill="var(--chart-spending)" radius={[5, 5, 0, 0]} maxBarSize={23} /></BarChart></ResponsiveContainer></div></section>
@@ -541,9 +573,19 @@ export default function App() {
       {page === 'plan' && <>
         <ReserveGrowthChart rows={projection} />
         <section className="panel plan-table-panel">
-          <div className="panel-header"><div><h2>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
+          <div className="panel-header"><div><h2 tabIndex={-1}>Your planned expenses</h2><p>Set a monthly amount. Edit any month that needs a different budget, including zero. These same amounts appear in Plan vs spending.</p></div><Button secondary onClick={() => addPlan()}><Plus size={16} /> Add expense</Button></div>
+          {planReviewMonth && <div className="plan-review-context"><span>{reviewMonthInHorizon ? `Editing ${formatMonth(planReviewMonth)} from Plan vs spending.` : `${formatMonth(planReviewMonth)} is outside your forecast (${formatMonth(projection[0].month)} – ${formatMonth(projection.at(-1)!.month)}). Open Plan settings to include that month.`}</span>{!reviewMonthInHorizon && <button type="button" className="text-button" onClick={() => {
+            const settings = document.querySelector<HTMLDetailsElement>('.simple-plan-settings');
+            if (settings) settings.open = true;
+            requestAnimationFrame(() => {
+              const label = planReviewMonth < projection[0].month ? 'First planning month' : 'Planning horizon';
+              const field = settings?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+              field?.focus({ preventScroll: true });
+              field?.scrollIntoView({ block: 'center' });
+            });
+          }}>Open plan settings <ArrowRight size={14} /></button>}</div>}
           <div className="plan-controls"><span>{formatMonth(visiblePlanningMonths[0].month)} – {formatMonth(visiblePlanningMonths.at(-1)!.month)}</span><div><button className="icon-button" disabled={visiblePlanOffset === 0} onClick={() => setPlanOffset(Math.max(0, visiblePlanOffset - 6))} aria-label="Previous planning months"><ChevronLeft size={18} /></button><button className="icon-button" disabled={visiblePlanOffset + 6 >= projection.length} onClick={() => setPlanOffset(visiblePlanOffset + 6)} aria-label="Next planning months"><ChevronRight size={18} /></button></div></div>
-          <PlanGrid items={expensePlanItems} months={visiblePlanningMonths} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} onMove={reorderPlan}>
+          <PlanGrid items={expensePlanItems} months={visiblePlanningMonths} selectedMonth={planReviewMonth} onPatch={patchPlan} onMonthly={editPlanMonthly} onMonth={editPlanMonth} onMove={reorderPlan}>
             <tr className="plan-total"><td colSpan={2}>Planned spending</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.expenseCents)}</td>)}<td /></tr>
             <tr className="plan-total plan-income-row"><td>{hasMonthlyIncome ? 'Monthly income' : 'Planned income'}<button type="button" className="text-button" onClick={() => setPage('settings')}>{hasMonthlyIncome ? 'Edit in Settings' : 'Set in Settings'}</button></td><td>{hasMonthlyIncome ? formatMoney(data.settings.monthlyIncomeCents!) : 'Not set'}</td>{visiblePlanningMonths.map(row => <td key={row.month}>{formatMoney(row.incomeCents)}</td>)}<td /></tr>
             {([
@@ -552,6 +594,7 @@ export default function App() {
           </PlanGrid>
           {!expensePlanItems.length && <Empty title="Add your planned expenses"><p>Enter what you expect to spend each month.</p></Empty>}
         </section>
+        <PlanCategoryLinks data={data} items={getOrderedPlanItems(data)} open={planCategoryLinksOpen} onOpenChange={setPlanCategoryLinksOpen} onCategory={(id, category) => patchPlan(id, { category })} />
         <div className="plan-summary simple-plan-summary">
           <Metric label="Planned spending" value={formatMoney(shownMonth.expenseCents)} detail={formatMonth(shownMonth.month)} icon={<ArrowUpRight size={18} />} />
           <Metric label="Monthly savings" value={formatMoney(shownMonth.netCents)} detail={`${formatMonth(shownMonth.month)} · income minus expenses`} icon={<TrendingUp size={18} />} />
