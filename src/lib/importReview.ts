@@ -45,12 +45,13 @@ function categoryLookup(categories: Category[]): Map<string, Category> {
 }
 
 /**
- * Suggests only exact, unambiguous expense context. Statement identity, amounts,
- * transaction type, and work scope are never inferred or changed.
+ * Defaults new transactions to personal before suggesting exact, unambiguous
+ * expense context. Existing identities retain their saved effective scope;
+ * merchant history never changes scope, statement identity, amounts, or type.
  */
 export function prepareImportReview(data: FinanceData, result: ImportResult): PreparedImportReview {
-  const ids = new Set(data.transactions.map(transaction => transaction.id));
-  const fingerprints = new Set(data.transactions.map(transaction => transaction.fingerprint));
+  const ids = new Map(data.transactions.map(transaction => [transaction.id, transaction]));
+  const fingerprints = new Map(data.transactions.map(transaction => [transaction.fingerprint, transaction]));
   const categories = categoryLookup(data.categories);
   const history = new Map<string, Transaction[]>();
   const duplicateCandidates = new Map<string, Transaction[]>();
@@ -73,8 +74,9 @@ export function prepareImportReview(data: FinanceData, result: ImportResult): Pr
   let learnedCount = 0;
   const possibleDuplicates: PossibleImportDuplicate[] = [];
   const transactions = result.transactions.map(original => {
-    if (ids.has(original.id) || fingerprints.has(original.fingerprint)) return original;
-    let incoming = original;
+    const saved = ids.get(original.id) ?? fingerprints.get(original.fingerprint);
+    if (saved) return { ...original, scope: getTransactionScope(data, saved) };
+    let incoming: Transaction = { ...original, scope: original.scope ?? 'personal' };
     const key = merchantKey(incoming, data);
     const previous = key ? history.get(key) ?? [] : [];
     const reviewed = previous.filter(transaction => transaction.category.trim());

@@ -82,22 +82,22 @@ export function WorkSettings({ data, onEdit }: WorkSettingsProps) {
 
   return <section className="panel work-settings-panel" aria-labelledby={`${id}-title`}>
     <div className="panel-header"><div><h2 id={`${id}-title`}>Work cash flow</h2><p>Keep reimbursable costs and reimbursements separate from your personal finances.</p></div><Briefcase size={21} /></div>
-    <p className="work-settings-intro">In Transactions, set Scope for work expenses and reimbursements. Leave your salary as Personal. Work cash flow appears separately in the monthly overview.</p>
+    <p className="work-settings-intro">Use the checkbox in the last transaction column for work expenses and reimbursements. New transactions start as Personal; leave salary unchecked. Work cash flow appears separately in the monthly overview.</p>
     <form onSubmit={event => { event.preventDefault(); save(); }}>
       <label className="field"><span>Work label</span><input aria-label="Work label" value={label} maxLength={120} placeholder="Work" autoComplete="off" onChange={event => { setLabel(event.target.value); setError(''); setStatus(''); }} /><small>For example, your employer or client name. Included in your backups and sync.</small></label>
       <fieldset className="work-settings-rules">
-        <legend>Automatically classify expense categories</legend>
-        <p id={`${id}-rules-help`}>Matching expenses, including refunds, use the work scope. Income is never classified automatically. An explicit transaction scope takes priority. Archived categories remain available here for historical records.</p>
+        <legend>Category rules for older records</legend>
+        <p id={`${id}-rules-help`}>These rules classify older expenses without a saved personal or work choice. New imports and manual transactions start as Personal and use the checkbox instead. Income is never classified automatically. Archived categories remain available for older records.</p>
         <div className="search"><Search size={16} /><input aria-label="Search work expense categories" placeholder="Search categories" value={query} onChange={event => setQuery(event.target.value)} /></div>
         <div className="work-settings-category-list" aria-describedby={`${id}-rules-help`}>
           {visibleChoices.map(choice => <label className="work-settings-category" key={choice.key}>
             <input type="checkbox" checked={[...choice.names].some(name => selectedNames.has(name))} onChange={event => toggle(choice.names, choice.name, event.target.checked)} />
             <span>{choice.name}{choice.archived && <small className="category-archived-badge">Archived</small>}{choice.missing && <small className="category-archived-badge">Missing from category catalog</small>}</span>
           </label>)}
-          {!visibleChoices.length && <p>{query ? 'No categories match this search.' : 'No categories yet. You can still set a transaction’s scope manually.'}</p>}
+          {!visibleChoices.length && <p>{query ? 'No categories match this search.' : 'No categories yet. Use the transaction checkbox to mark work expenses.'}</p>}
         </div>
       </fieldset>
-      <p className="footnote">You can leave every category unchecked and classify work transactions manually. Saving these rules updates the overview without changing transaction categories or amounts.</p>
+      <p className="footnote">These rules are optional. Saved personal or work choices take priority. Saving rules updates older records in the overview without changing transaction categories or amounts.</p>
       {error && <div className="alert error" role="alert">{error}</div>}
       {status && <div className="alert success" role="status"><Check size={16} />{status}</div>}
       <button type="submit" className="button">Save work settings</button>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyData } from '../src/lib/finance';
+import { applyImport, createEmptyData, getTransactionScope } from '../src/lib/finance';
 import { prepareImportReview } from '../src/lib/importReview';
 import type { FinanceData, ImportResult, Transaction } from '../src/lib/types';
 
@@ -28,6 +28,88 @@ function reviewed(id = 'old', patch: Partial<Transaction> = {}): Transaction {
   return transaction(id, { category: 'Groceries', description: 'Weekly groceries', date: '2032-09-01', month: '2032-09', ...patch });
 }
 
+describe('personal import default', () => {
+  it('makes fresh rows explicitly personal even when their category is configured for work', () => {
+    const data = fixture();
+    data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };
+    const incoming = transaction('new', { category: 'Travel' });
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.learnedCount).toBe(0);
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'personal' }]);
+    const imported = applyImport(data, prepared.result, 'example-statement.xlsx', new Date(LATER));
+    expect(getTransactionScope(imported, imported.transactions[0])).toBe('personal');
+    expect(incoming.scope).toBeUndefined();
+  });
+
+  it('does not infer work from employer text on income or expense rows', () => {
+    const data = fixture();
+    data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };
+    const incoming = [
+      transaction('salary', { source: 'bank', kind: 'income', amountCents: 300_000, originalDescription: 'Example employer salary' }),
+      transaction('reimbursement', { source: 'bank', kind: 'income', amountCents: 20_000, originalDescription: 'Example employer reimbursement' }),
+      transaction('expense', { originalDescription: 'Example employer trip', category: 'Travel' }),
+    ];
+    expect(prepareImportReview(data, result(incoming)).result.transactions).toEqual(incoming.map(row => ({ ...row, scope: 'personal' })));
+  });
+
+  it.each(['id', 'fingerprint'] as const)('shows saved explicit work scope for an exact %s without replacing saved edits', identity => {
+    const data = fixture();
+    const saved = reviewed('saved', { scope: 'work', description: 'Saved description' });
+    data.transactions = [saved];
+    const incoming = transaction(identity === 'id' ? saved.id : 'new-id', {
+      ...(identity === 'fingerprint' ? { fingerprint: saved.fingerprint } : {}),
+      scope: 'personal', description: 'Parsed description', amountCents: -3_000,
+    });
+    const before = structuredClone(data);
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'work' }]);
+    expect(prepared.learnedCount).toBe(0);
+    expect(prepared.possibleDuplicates).toEqual([]);
+    const imported = applyImport(data, prepared.result, 'example-statement.xlsx', new Date(LATER));
+    expect(imported.transactions).toEqual([saved]);
+    expect(data).toEqual(before);
+  });
+
+  it.each(['id', 'fingerprint'] as const)('shows legacy work-category scope for an exact %s without modifying its stored classification', identity => {
+    const data = fixture();
+    data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };
+    const saved = reviewed('saved', { category: 'Travel' });
+    data.transactions = [saved];
+    const incoming = transaction(identity === 'id' ? saved.id : 'new-id', {
+      ...(identity === 'fingerprint' ? { fingerprint: saved.fingerprint } : {}),
+      category: '', scope: 'personal',
+    });
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'work' }]);
+    const imported = applyImport(data, prepared.result, 'example-statement.xlsx', new Date(LATER));
+    expect(imported.transactions).toEqual([saved]);
+    expect(saved.scope).toBeUndefined();
+    expect(getTransactionScope(imported, imported.transactions[0])).toBe('work');
+  });
+
+  it('keeps saved personal scope authoritative over incoming work scope and category rules', () => {
+    const data = fixture();
+    data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };
+    const saved = reviewed('saved', { category: 'Travel', scope: 'personal' });
+    data.transactions = [saved];
+    const incoming = transaction(saved.id, { scope: 'work', category: 'Travel' });
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'personal' }]);
+    const imported = applyImport(data, prepared.result, 'example-statement.xlsx', new Date(LATER));
+    expect(imported.transactions).toEqual([saved]);
+    expect(getTransactionScope(imported, imported.transactions[0])).toBe('personal');
+  });
+
+  it('keeps an explicitly selected fresh work scope when importing', () => {
+    const data = fixture();
+    const incoming = transaction('new', { scope: 'work' });
+    const prepared = prepareImportReview(data, result([incoming]));
+    expect(prepared.result.transactions).toEqual([incoming]);
+    const imported = applyImport(data, prepared.result, 'example-statement.xlsx', new Date(LATER));
+    expect(imported.transactions[0].scope).toBe('work');
+  });
+});
+
 describe('reviewed expense context', () => {
   it('fills category and description from exact normalized history without changing identity or financial fields', () => {
     const data = fixture();
@@ -37,7 +119,7 @@ describe('reviewed expense context', () => {
     const before = structuredClone({ data, input });
     const prepared = prepareImportReview(data, input);
     expect(prepared.learnedCount).toBe(1);
-    expect(prepared.result.transactions).toEqual([{ ...incoming, category: 'Groceries', description: 'Weekly groceries' }]);
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'personal', category: 'Groceries', description: 'Weekly groceries' }]);
     expect(prepared.result).toMatchObject({ warnings: input.warnings, summary: input.summary });
     expect({ data, input }).toEqual(before);
   });
@@ -67,7 +149,7 @@ describe('reviewed expense context', () => {
     const data = fixture();
     data.transactions = [reviewed()];
     const incoming = transaction('new', { category: 'Travel' });
-    expect(prepareImportReview(data, result([incoming]))).toMatchObject({ learnedCount: 0, result: { transactions: [incoming] } });
+    expect(prepareImportReview(data, result([incoming]))).toMatchObject({ learnedCount: 0, result: { transactions: [{ ...incoming, scope: 'personal' }] } });
   });
 
   it.each([
@@ -81,18 +163,18 @@ describe('reviewed expense context', () => {
     const data = fixture();
     data.transactions = [reviewed()];
     const incoming = transaction('new', patch);
-    expect(prepareImportReview(data, result([incoming]))).toMatchObject({ learnedCount: 0, result: { transactions: [incoming] } });
+    expect(prepareImportReview(data, result([incoming]))).toMatchObject({ learnedCount: 0, result: { transactions: [{ ...incoming, scope: incoming.scope ?? 'personal' }] } });
   });
 
-  it('does not infer work scope through an otherwise matching category', () => {
+  it('learns an otherwise matching category without changing the personal default to work', () => {
     const data = fixture();
     data.work = { label: 'Example employer', expenseCategories: ['Travel'], updatedAt: STAMP };
     data.transactions = [reviewed('old', { category: 'Travel', scope: 'personal' })];
     const incoming = transaction('new');
     const prepared = prepareImportReview(data, result([incoming]));
-    expect(prepared.learnedCount).toBe(0);
-    expect(prepared.result.transactions[0]).toEqual(incoming);
-    expect(Object.hasOwn(prepared.result.transactions[0], 'scope')).toBe(false);
+    expect(prepared.learnedCount).toBe(1);
+    expect(prepared.result.transactions[0]).toEqual({ ...incoming, scope: 'personal', category: 'Travel', description: 'Weekly groceries' });
+    expect(getTransactionScope(data, prepared.result.transactions[0])).toBe('personal');
   });
 
   it('can reuse work expense context when work scope is explicitly provided', () => {
@@ -137,13 +219,13 @@ describe('reviewed expense context', () => {
     expect(prepareImportReview(data, result([transaction('new')])).result.transactions[0].description).toBe('WEEKLY   groceries');
   });
 
-  it('leaves exact imported and deleted identities untouched', () => {
+  it('leaves exact imported and deleted financial fields untouched while showing saved scope', () => {
     const data = fixture();
     data.transactions = [reviewed(), transaction('same'), transaction('deleted', { deletedAt: LATER })];
     const incoming = [transaction('new-id', { fingerprint: 'fingerprint-same' }), transaction('deleted')];
     const prepared = prepareImportReview(data, result(incoming));
     expect(prepared.learnedCount).toBe(0);
-    expect(prepared.result.transactions).toEqual(incoming);
+    expect(prepared.result.transactions).toEqual(incoming.map(row => ({ ...row, scope: 'personal' })));
     expect(prepared.possibleDuplicates).toEqual([]);
   });
 });
@@ -155,8 +237,8 @@ describe('possible changed statement transactions', () => {
     data.transactions = [old];
     const incoming = transaction('new', { source, amountCents: -2_100 });
     const prepared = prepareImportReview(data, result([incoming]));
-    expect(prepared.possibleDuplicates).toEqual([{ incoming, existing: [old] }]);
-    expect(prepared.result.transactions).toEqual([incoming]);
+    expect(prepared.possibleDuplicates).toEqual([{ incoming: { ...incoming, scope: 'personal' }, existing: [old] }]);
+    expect(prepared.result.transactions).toEqual([{ ...incoming, scope: 'personal' }]);
     expect(data.transactions).toEqual([old]);
   });
 
@@ -166,7 +248,7 @@ describe('possible changed statement transactions', () => {
     const incoming = [transaction('new-first'), transaction('new-second'), transaction('old')];
     const prepared = prepareImportReview(data, result(incoming));
     expect(prepared.possibleDuplicates).toEqual([]);
-    expect(prepared.result.transactions).toEqual(incoming);
+    expect(prepared.result.transactions).toEqual(incoming.map(row => ({ ...row, scope: 'personal' })));
     expect(prepared.result.transactions).toHaveLength(3);
   });
 
@@ -184,6 +266,6 @@ describe('possible changed statement transactions', () => {
     const data = fixture();
     data.transactions = [transaction('old'), transaction('other', { amountCents: -2_500 }), transaction('deleted', { deletedAt: LATER })];
     const incoming = transaction('new', { amountCents: -2_100 });
-    expect(prepareImportReview(data, result([incoming])).possibleDuplicates).toEqual([{ incoming, existing: data.transactions.slice(0, 2) }]);
+    expect(prepareImportReview(data, result([incoming])).possibleDuplicates).toEqual([{ incoming: { ...incoming, scope: 'personal' }, existing: data.transactions.slice(0, 2) }]);
   });
 });
