@@ -33,7 +33,7 @@ Before confirming, use the trash button in the preview’s **Exclude** column to
 
 ## Categories
 
-Use **Manage categories**, available in Transactions and Settings, to create, rename, archive, or reactivate options. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.
+In **Settings**, open **Categories → Manage categories** directly below Monthly income to create, rename, archive, or reactivate options. The same manager is available in Transactions. The selectors let you search for and choose a registered category; typing in the search field only filters the list. Transactions and manual entries share the same list. You can also leave a record **Uncategorized** while reviewing it.
 
 Categories already present in your data are added to the catalog automatically. Renaming updates the category assigned to existing records; archiving removes the category from the options for new entries while preserving historical records and filters. The catalog is included in local saves, backups, and Drive synchronization.
 
