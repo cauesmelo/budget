@@ -1,5 +1,6 @@
 import { getTransactionScope, isReportableTransaction, isValidMonth, projectReserve } from './finance';
 import type { FinanceData, ProjectionMonth } from './types';
+import { getTransactionReportingMonth } from './transactionMonth';
 
 export interface ReserveInsights {
   openingCents: number;
@@ -149,7 +150,7 @@ export function getBudgetComparison(data: FinanceData, month: string): BudgetCom
   if (!isValidMonth(month)) throw new Error('Invalid month.');
   const row = projectReserve(data).find(entry => entry.month === month);
   if (!row || !data.planItems.some(item => !item.deletedAt && item.kind === 'expense' && item.startMonth <= month && (!item.endMonth || item.endMonth >= month))) return null;
-  const recorded = data.transactions.filter(transaction => !transaction.deletedAt && transaction.month === month && transaction.kind !== 'transfer' && isReportableTransaction(data, transaction) && getTransactionScope(data, transaction) === 'personal');
+  const recorded = data.transactions.filter(transaction => !transaction.deletedAt && getTransactionReportingMonth(transaction) === month && transaction.kind !== 'transfer' && isReportableTransaction(data, transaction) && getTransactionScope(data, transaction) === 'personal');
   let recordedIncomeCents = 0;
   let recordedExpenseCents = 0;
   for (const transaction of recorded) {

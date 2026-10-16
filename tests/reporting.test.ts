@@ -104,12 +104,13 @@ describe('fresh reporting epochs', () => {
   });
 });
 
-describe('statement reporting boundary and retired workbook compatibility', () => {
-  it('filters imports before deduplication, counts and category discovery using the reporting month', () => {
+describe('purchase reporting boundary and retired workbook compatibility', () => {
+  it('filters imports before deduplication, counts and category discovery using card purchase dates', () => {
     const data = fresh();
     const incoming: ImportResult = { source: 'card', warnings: [], transactions: [
       transaction('excluded', { source: 'card', month: '2032-09', date: '2032-09-30', category: 'Old category' }),
-      transaction('included', { source: 'card', date: '2032-08-20', category: 'Shopping' }),
+      transaction('excluded-current-bill', { source: 'card', month: '2032-11', date: '2032-08-20', category: 'Earlier purchase' }),
+      transaction('included', { source: 'card', month: '2032-11', date: '2032-10-20', category: 'Shopping' }),
       transaction('income', { amountCents: 5_000, kind: 'income' }),
     ] };
     const imported = applyImport(data, incoming, 'example-card.xlsx', new Date(RESET));
@@ -118,20 +119,43 @@ describe('statement reporting boundary and retired workbook compatibility', () =
     expect(imported.categories.map(item => item.name)).toEqual(['Shopping']);
     expect(summarizeMonth(imported, '2032-10')).toMatchObject({ incomeCents: 5_000, expenseCents: 2_000, count: 2 });
     expect(summarizeMonth(imported, '2032-09')).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0 });
+    expect(summarizeMonth(imported, '2032-11')).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0 });
     expect(previewDuplicateCount(imported, incoming)).toBe(2);
     const onlyOld = { ...incoming, transactions: [incoming.transactions[0]] };
     expect(applyImport(data, onlyOld, 'old-file.xlsx', new Date(RESET))).toEqual(data);
   });
 
-  it('removes pre-start records and their import receipts on restore without discarding older card purchase dates', () => {
+  it('retains saved card identities and edits on restore while hiding pre-start purchases from reports', () => {
     const data = fresh();
     data.transactions = [transaction('old', { month: '2032-09', importId: 'old-import', category: 'Discarded' }),
-      transaction('current', { source: 'card', date: '2032-09-10', importId: 'current-import', category: 'Kept' })];
+      transaction('current', { source: 'card', date: '2032-09-10', importId: 'current-import', category: 'Kept', description: 'Saved review', scope: 'work' })];
     data.imports = ['old-import', 'current-import'].map(id => ({ id, source: 'card', count: 1, filename: `${id}.xlsx`, importedAt: CREATED, updatedAt: CREATED }));
     const restored = validateBackup({ ...data, categories: undefined });
     expect(restored.transactions.map(item => item.id)).toEqual(['current']);
     expect(restored.imports.map(item => item.id)).toEqual(['current-import']);
     expect(restored.categories.map(item => item.name)).toEqual(['Kept']);
+    expect(restored.transactions[0]).toEqual(data.transactions[1]);
+    expect(summarizeMonth(restored, '2032-10')).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0, workInCents: 0, workOutCents: 0 });
+    expect(summarizeMonth(restored, '2032-09')).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0, workInCents: 0, workOutCents: 0 });
+  });
+
+  it('preserves hidden purchase edits and deletion records through backup and same-epoch merges', () => {
+    const original = addCategory(fresh(), 'Shopping', new Date(RESET));
+    original.transactions = [
+      transaction('older-purchase', { source: 'card', month: '2032-11', date: '2032-09-20', description: 'Reviewed before cutoff', category: 'Shopping', scope: 'work' }),
+      transaction('removed-purchase', { source: 'card', month: '2032-11', date: '2032-09-21', description: 'Removed before cutoff', deletedAt: RESET, updatedAt: RESET }),
+    ];
+    const restored = validateBackup(serializeBackup(original));
+    const staleDevice = structuredClone(original);
+    staleDevice.transactions[1] = { ...staleDevice.transactions[1], updatedAt: CREATED };
+    delete staleDevice.transactions[1].deletedAt;
+    for (const merged of [mergeFinanceData(restored, staleDevice), mergeFinanceData(staleDevice, restored)]) {
+      expect(merged.transactions).toEqual(restored.transactions);
+      expect(summarizeMonth(merged, '2032-11')).toMatchObject({ incomeCents: 0, expenseCents: 0, count: 0, workOutCents: 0 });
+      const incoming: ImportResult = { source: 'card', warnings: [], transactions: original.transactions.map(item => ({ ...item, description: '', category: '', scope: 'personal' })) };
+      expect(applyImport(merged, incoming, 'repeated-statement.xlsx', new Date(FUTURE))).toEqual(merged);
+    }
+    expect(original.transactions[0].description).toBe('Reviewed before cutoff');
   });
 
   it('discards retired transactions, imports, snapshots and fixed income without generating categories', () => {

@@ -172,8 +172,8 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
   const result = emptyResult('card');
   const metadata = cardMetadata(rows, sheetName, filename);
   const month = options.cardMonth ?? metadata.month;
-  if (!month || !validMonth(month)) throw new Error('Could not identify the statement month. Choose the budget month (YYYY-MM) before importing.');
-  if (options.cardMonth && metadata.month && options.cardMonth !== metadata.month) result.warnings.push(`The selected budget month (${options.cardMonth}) differs from the detected statement month (${metadata.month}).`);
+  if (!month || !validMonth(month)) throw new Error('Could not identify the statement month. Choose the statement month (YYYY-MM) before importing.');
+  if (options.cardMonth && metadata.month && options.cardMonth !== metadata.month) result.warnings.push(`The selected statement month (${options.cardMonth}) differs from the detected statement month (${metadata.month}). Purchases still count in the month of their original date.`);
   const headers = rows[index].map(normalize);
   const dateCol = headers.indexOf('data');
   const labelCol = headers.indexOf('lancamento');
@@ -201,16 +201,16 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
   }
   if (metadata.partialCents !== null && Math.abs(positiveCharges - metadata.partialCents) > 1) result.warnings.push('The sum of imported charges differs from the statement total. Check refunds, payments, and transactions before closing the month.');
   if (skipped) result.warnings.push(`${formatNumber(skipped)} dated transaction(s) without a valid amount were skipped.`);
-  result.warnings.push('The date is the original purchase date; the budget month is the statement month. Older installment purchases were not recorded again in the purchase month.');
+  result.warnings.push('Card purchases count in the month of their original purchase date, including installment entries. The statement month identifies the imported bill and does not set the spending month.');
   if (metadata.open) result.warnings.push('This statement is still open. Recent purchases and installments may change before closing; review changed amounts when importing an updated version.');
   if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Statement payments appear as account movements, excluded from income and spending. Use Exclude to remove them before importing.');
-  result.summary = `${formatNumber(result.transactions.length)} card transactions for budget month ${month}.`;
+  result.summary = `${formatNumber(result.transactions.length)} card transactions from statement ${month}, reported by purchase date.`;
   return result;
 }
 
 /** Parses source values only; spreadsheet formulas and embedded instructions are never executed. */
 export function parseWorkbook(workbook: XLSX.WorkBook, filename: string, options: ImportOptions = {}): ImportResult {
-  if (options.cardMonth && !validMonth(options.cardMonth)) throw new Error('Invalid budget month. Use YYYY-MM format.');
+  if (options.cardMonth && !validMonth(options.cardMonth)) throw new Error('Invalid statement month. Use YYYY-MM format.');
   for (const name of workbook.SheetNames) {
     const rows = getRows(workbook.Sheets[name]);
     const card = parseCard(rows, name, filename, options);

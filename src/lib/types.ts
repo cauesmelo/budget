@@ -5,6 +5,7 @@ export interface Transaction {
   id: string;
   fingerprint: string;
   date: string;
+  /** Card statement month retained for import identity; use getTransactionReportingMonth for spending reports. */
   month: string;
   amountCents: number;
   kind: TransactionKind;

@@ -69,7 +69,7 @@ describe('future category configuration', () => {
     expect(next.imports).toEqual(original.imports);
   });
 
-  it('uses the competence month, preserves active assignments, and clears obsolete unmapped future assignments', () => {
+  it('uses the reporting month, preserves active assignments, and clears obsolete unmapped future assignments', () => {
     const original = state();
     const next = configureFutureCategories(original, configuration, LATER);
     expect(next.transactions[1]).toEqual({ ...original.transactions[1], category: 'Fixed costs', updatedAt: LATER.toISOString() });
@@ -77,6 +77,25 @@ describe('future category configuration', () => {
     expect(next.transactions[3]).toEqual({ ...original.transactions[3], category: '', updatedAt: LATER.toISOString() });
     expect(next.transactions[5]).toEqual(original.transactions[5]);
     expect(next.transactions.map(item => item.amountCents)).toEqual(original.transactions.map(item => item.amountCents));
+  });
+
+  it('uses card purchase dates for category cutoffs while preserving billing identities and historical edits', () => {
+    const original = state();
+    original.transactions = [
+      { ...transaction('before-cutoff', '2026-10', 'Housing'), source: 'card', date: '2026-09-30', description: 'Historical note' },
+      { ...transaction('at-cutoff', '2026-11', 'Housing'), source: 'card', date: '2026-10-01' },
+      { ...transaction('deleted-card', '2026-11', 'Music'), source: 'card', date: '2026-10-01', deletedAt: NOW.toISOString() },
+    ];
+    const before = structuredClone(original);
+    const next = configureFutureCategories(original, configuration, LATER);
+    expect(next.transactions[0]).toEqual(original.transactions[0]);
+    expect(next.transactions[1]).toEqual({ ...original.transactions[1], category: 'Fixed costs', updatedAt: LATER.toISOString() });
+    expect(next.transactions[2]).toEqual(original.transactions[2]);
+    expect(next.transactions.map(item => [item.id, item.fingerprint, item.date, item.month, item.amountCents])).toEqual(
+      original.transactions.map(item => [item.id, item.fingerprint, item.date, item.month, item.amountCents]),
+    );
+    expect(original).toEqual(before);
+    expect(configureFutureCategories(next, configuration, AFTER)).toBe(next);
   });
 
   it('splits spanning plans at the boundary, preserving identities, intervals, explicit zeros, and every monthly amount', () => {

@@ -2,6 +2,7 @@ import type { FinanceData, ImportResult, InstallmentSchedule, MonthSummary, Plan
 import { categoryNameKey, mergeCategoryCatalog, normalizeCategoryData } from './categories';
 import { canonicalAccountIdentity } from './identity';
 import { formatMoneyAmount } from './numbers';
+import { getTransactionReportingMonth } from './transactionMonth';
 
 const MONEY_FORMAT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -137,7 +138,7 @@ export function getTransactionScope(data: FinanceData, transaction: Transaction)
 
 export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
   if (!isValidMonth(month)) throw new Error('Invalid month.');
-  const transactions = data.transactions.filter(item => isReportableTransaction(data, item) && item.month === month && !item.deletedAt && item.kind !== 'transfer');
+  const transactions = data.transactions.filter(item => isReportableTransaction(data, item) && getTransactionReportingMonth(item) === month && !item.deletedAt && item.kind !== 'transfer');
   const workCategories = workCategoryKeys(data);
   let incomeCents = 0;
   let expenseCents = 0;
@@ -164,14 +165,16 @@ export function summarizeMonth(data: FinanceData, month: string): MonthSummary {
   return { month, incomeCents, expenseCents, netCents: incomeCents - expenseCents, categories, count, workInCents, workOutCents, workNetCents: workInCents - workOutCents };
 }
 
-/** Statement reporting months determine eligibility, including older card purchases billed later. */
+/** Reporting eligibility follows card purchase dates, independently of their statement month. */
 export function isReportableTransaction(data: Pick<FinanceData, 'reporting'>, transaction: Transaction): boolean {
-  return ['bank', 'card', 'manual'].includes(transaction.source) && (!data.reporting || transaction.month >= data.reporting.startMonth);
+  return ['bank', 'card', 'manual'].includes(transaction.source) && (!data.reporting || getTransactionReportingMonth(transaction) >= data.reporting.startMonth);
 }
 
 /** Drops retired workbook data before it can populate reporting or category catalogs. */
 export function sanitizeFinanceData(data: FinanceData, startMonth = data.reporting?.startMonth): FinanceData {
-  const eligible = (item: Transaction) => ['bank', 'card', 'manual'].includes(item.source) && (startMonth === undefined || item.month >= startMonth);
+  // Preserve existing statement identities and newly eligible purchases even if statement metadata is earlier.
+  // Reporting filters purchase dates separately, without discarding older installment edits or tombstones.
+  const eligible = (item: Transaction) => ['bank', 'card', 'manual'].includes(item.source) && (startMonth === undefined || item.month >= startMonth || (item.source === 'card' && getTransactionReportingMonth(item) >= startMonth));
   const transactions = data.transactions.filter(eligible);
   const removedImportIds = new Set(data.transactions.filter(item => !eligible(item)).map(item => item.importId).filter(Boolean));
   const importCounts = new Map<string, number>();
@@ -264,14 +267,14 @@ function installmentHash(value: string): string {
   return hash.toString(16).padStart(16, '0');
 }
 
-/** Suggestions require review: another budget row may already cover the purchase. */
+/** Planning suggestions use the statement month to schedule remaining installments, independently of purchase-date reporting. */
 export function getInstallmentSuggestions(data: FinanceData, month: string): InstallmentSchedule[] {
   if (!isValidMonth(month)) throw new Error('Invalid month.');
   const planned = new Set(data.planItems.filter(item => !item.deletedAt && item.behavior === 'installments')
     .flatMap(item => (item.installments ?? []).flatMap(schedule => schedule.sourceKey ? [schedule.sourceKey] : [])));
   const groups = new Map<string, { transaction: Transaction; count: number }[]>();
   for (const transaction of data.transactions) {
-    if (transaction.month !== month || transaction.source !== 'card' || transaction.kind !== 'expense' || transaction.amountCents >= 0 || !isReportableTransaction(data, transaction)) continue;
+    if (transaction.month !== month || transaction.source !== 'card' || transaction.kind !== 'expense' || transaction.amountCents >= 0 || (data.reporting && transaction.month < data.reporting.startMonth)) continue;
     const match = transaction.installment?.trim().match(/^(\d{1,3})\s*\/\s*(\d{1,3})$/);
     if (!match) continue;
     const current = Number(match[1]);

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { parseImport, parseWorkbook } from '../src/lib/importers';
-import { applyImport, createEmptyData } from '../src/lib/finance';
+import { applyImport, createEmptyData, previewDuplicateCount } from '../src/lib/finance';
+import { getTransactionReportingMonth } from '../src/lib/transactionMonth';
 
 function workbook(sheets: Record<string, unknown[][]>): XLSX.WorkBook {
   const result = XLSX.utils.book_new();
@@ -113,22 +114,51 @@ describe('Itaú importers', () => {
     expect(result.transactions.map(t => t.kind)).toEqual(['transfer', 'transfer', 'income']);
   });
 
-  it('places installments in invoice month and handles payment and refund separately', () => {
+  it('retains statement identity while reporting card entries by their purchase dates', () => {
     const result = parseWorkbook(workbook({ 'Fatura 10-26': cardRows() }), 'card.xlsx');
     expect(result.source).toBe('card');
     expect(result.transactions).toHaveLength(5);
     expect(result.transactions[0]).toMatchObject({ date: '2026-08-05', month: '2026-10', amountCents: -10000, installment: '2/3', kind: 'expense' });
+    expect(result.transactions.map(getTransactionReportingMonth)).toEqual(['2026-08', '2026-10', '2026-10', '2026-10', '2026-09']);
     expect(result.transactions[3]).toMatchObject({ amountCents: 2000, kind: 'expense' });
     expect(result.transactions[4]).toMatchObject({ amountCents: 50000, kind: 'transfer' });
     expect(result.transactions.every(t => t.category === '' && t.description === '')).toBe(true);
     expect(result.warnings.some(w => w.includes('differs from the statement total'))).toBe(false);
     expect(result.warnings.some(w => w.includes('still open'))).toBe(true);
+    expect(result.warnings.some(w => w.includes('original purchase date'))).toBe(true);
+    expect(result.warnings.some(w => w.includes('budget month is the statement month'))).toBe(false);
   });
 
-  it('honors an explicit invoice month and reports mismatch', () => {
+  it('uses a statement-month override only for bill identity and reports mismatch', () => {
     const result = parseWorkbook(workbook({ Fatura: cardRows() }), 'invoice.xlsx', { cardMonth: '2026-11' });
     expect(result.transactions.every(t => t.month === '2026-11')).toBe(true);
+    expect(result.transactions.map(getTransactionReportingMonth)).toEqual(['2026-08', '2026-10', '2026-10', '2026-10', '2026-09']);
     expect(result.warnings.some(w => w.includes('differs from the detected statement'))).toBe(true);
+    expect(result.summary).toBe('5 card transactions from statement 2026-11, reported by purchase date.');
+  });
+
+  it('reports October purchases from a November statement in October without changing re-import identity or edits', () => {
+    const input = workbook({ Fatura: [
+      ['Fatura Novembro/2026'],
+      ['Data', 'Lançamento', 'Parcelamento', 'Valor', 'Número do cartão'],
+      ['14/10/2026', 'Example grocery store', null, 25, '****0001'],
+      ['13/10/2026', 'Example clothing store', null, 60, '****0001'],
+      ['12/10/2026', 'Example installment store', '2/3', 40, '****0001'],
+    ] });
+    const first = parseWorkbook(input, 'invoice.xlsx');
+    const repeated = parseWorkbook(input, 'renamed-copy.xlsx');
+    expect(first.transactions.map(getTransactionReportingMonth)).toEqual(['2026-10', '2026-10', '2026-10']);
+    expect(first.transactions.every(transaction => transaction.month === '2026-11')).toBe(true);
+    expect(repeated.transactions.map(transaction => [transaction.id, transaction.fingerprint])).toEqual(first.transactions.map(transaction => [transaction.id, transaction.fingerprint]));
+
+    const imported = applyImport(createEmptyData(), first, 'invoice.xlsx');
+    imported.transactions[0].description = 'Existing note';
+    imported.transactions[0].scope = 'work';
+    imported.transactions[1].deletedAt = '2026-10-15T12:00:00.000Z';
+    expect(previewDuplicateCount(imported, repeated)).toBe(3);
+    const reimported = applyImport(imported, repeated, 'renamed-copy.xlsx');
+    expect(reimported.transactions).toEqual(imported.transactions);
+    expect(reimported.transactions.map(getTransactionReportingMonth)).toEqual(['2026-10', '2026-10', '2026-10']);
   });
 
   it('extracts competence from the textual invoice heading without a due date', () => {
@@ -140,8 +170,8 @@ describe('Itaú importers', () => {
 
   it('does not guess an invoice month when unavailable', () => {
     const rows = cardRows().slice(3);
-    expect(() => parseWorkbook(workbook({ Compras: rows }), 'purchases.xlsx')).toThrow('budget month');
-    expect(() => parseWorkbook(workbook({ Compras: rows }), 'purchases.xlsx', { cardMonth: '2026-13' })).toThrow('Invalid budget month');
+    expect(() => parseWorkbook(workbook({ Compras: rows }), 'purchases.xlsx')).toThrow('statement month');
+    expect(() => parseWorkbook(workbook({ Compras: rows }), 'purchases.xlsx', { cardMonth: '2026-13' })).toThrow('Invalid statement month');
   });
 
   it('retains identical legitimate purchases but creates stable identities across renamed files', () => {

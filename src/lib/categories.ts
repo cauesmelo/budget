@@ -1,4 +1,5 @@
 import type { Category, FinanceData, PlanItem } from './types';
+import { getTransactionReportingMonth } from './transactionMonth';
 
 // Categories discovered in older backups must not replace a current edit.
 const MIGRATION_CLOCK = '1970-01-01T00:00:00.000Z';
@@ -222,7 +223,7 @@ export function configureFutureCategories(data: FinanceData, configuration: Futu
     changed = true;
   }
   for (const item of next.transactions) {
-    if (item.deletedAt || item.month < fromMonth) continue;
+    if (item.deletedAt || getTransactionReportingMonth(item) < fromMonth) continue;
     const category = futureName(item.category);
     if (category !== item.category) {
       item.category = category;

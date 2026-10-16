@@ -86,10 +86,12 @@ describe('explicit category application to similar expenses', () => {
   it('ignores source and candidate records outside the current reporting period', () => {
     const data = fixture();
     data.reporting = { startMonth: '2032-10', resetId: 'example-reset', updatedAt: STAMP };
-    data.transactions[1].month = '2032-09';
+    data.transactions[1].month = '2032-11';
+    data.transactions[1].date = '2032-09-01';
     expect(getSimilarUncategorizedExpenses(data, 'source')).toEqual([]);
-    data.transactions[1].month = '2032-10';
-    data.transactions[0].month = '2032-09';
+    data.transactions[1].date = '2032-10-01';
+    data.transactions[0].month = '2032-11';
+    data.transactions[0].date = '2032-09-01';
     expect(getSimilarUncategorizedExpenses(data, 'source')).toEqual([]);
   });
 });
