@@ -18,9 +18,14 @@
 .tx-table tbody tr,.plan-table tbody tr{background:var(--surface)}
 .tx-table tbody tr:nth-child(even),.plan-table tbody tr:nth-child(even){background:var(--surface-soft)}
 .tx-table tbody tr:hover,.tx-table tbody tr:focus-within,.plan-table tbody tr:not(.plan-total):hover,.plan-table tbody tr:not(.plan-total):focus-within{background:var(--table-hover)}
+.tx-table tbody tr.needs-category{background:#fff7e6}
+.tx-table tbody tr.needs-category:hover,.tx-table tbody tr.needs-category:focus-within{background:#ffefd0}
+.tx-table tr.needs-category>td:first-child{box-shadow:inset 3px 0 #b7791f}
 .tx-table .original{min-width:190px;max-width:270px}
 .original>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px;font-size:12px;line-height:1.7;font-weight:500}
 .original small{display:block;font-size:11px;margin-top:3px}
+.tx-table .category-needed{display:flex;align-items:center;gap:5px;color:#7a4c0a;font-weight:600;line-height:1.5}
+.category-needed svg{flex-shrink:0}
 .tx-table input{padding:9px;background:var(--surface);border:1px solid var(--control-border);border-radius:5px;font-size:12px;min-width:155px;width:100%;max-width:230px}
 input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .tx-table input:hover,.plan-table input:hover{border-color:#59795b}

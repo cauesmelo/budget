@@ -63,9 +63,10 @@ function TxTable({ transactions, categories, data, update, remove, removeMode = 
   return <div className="table-scroll"><table className="tx-table"><thead><tr><th>Date</th><th>Transaction</th><th>Description</th><th>Category</th><th className="right">Amount</th>{remove && <th className={exclude ? 'preview-row-action' : undefined}>{exclude ? 'Exclude' : ''}</th>}<th scope="col" className="work-column" title={`Check ${workLabel} expenses and reimbursements`}><span>{workLabel}</span></th></tr></thead><tbody>{transactions.map(tx => {
     const scope = getTransactionScope(data, tx);
     const similar = applyCategory ? getSimilarUncategorizedExpenses(data, tx.id) : [];
-    return <tr key={tx.id} data-transaction-id={tx.id}>
+    const needsCategory = tx.kind === 'expense' && !tx.category.trim();
+    return <tr key={tx.id} data-transaction-id={tx.id} className={needsCategory ? 'needs-category' : undefined}>
       <td className="date-cell">{tx.date.split('-').reverse().join('/')}<small>{sourceNames[tx.source]}</small></td>
-      <td className="original"><span title={tx.originalDescription}>{tx.originalDescription}</span>{tx.installment && <small>{tx.installment}</small>}</td>
+      <td className="original"><span title={tx.originalDescription}>{tx.originalDescription}</span>{tx.installment && <small>{tx.installment}</small>}{needsCategory && <small className="category-needed"><Tag size={11} aria-hidden="true" /> Needs category</small>}</td>
       <td><input aria-label={`Description for ${tx.originalDescription}`} placeholder="Add description" value={tx.description} onChange={e => update(tx.id, { description: e.target.value })} /></td>
       <td><CategorySelect label={`Category for ${tx.originalDescription}`} options={categories} value={tx.category} onChange={category => update(tx.id, { category })} />{similar.length > 0 && <button type="button" className="text-button apply-category" onClick={() => applyCategory?.(tx.id)} title={`Apply ${tx.category} to uncategorized expenses from the same merchant, account, and scope`}>Apply to {formatNumber(similar.length)} similar</button>}</td>
       <td className={`right amount ${tx.kind === 'transfer' ? 'muted' : tx.amountCents > 0 ? 'green' : ''}`}>{formatMoney(tx.amountCents)}<small className="transaction-flow-label" title={tx.kind === 'transfer' ? 'Excluded from income and spending. Remove this row if you do not want to keep it.' : undefined}>{getTransactionFlowLabel(tx, scope)}</small></td>
