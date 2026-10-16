@@ -20,7 +20,7 @@ For development, use `npm run dev`. For a static build, use `npm run build`; to 
 ## First use
 
 1. Import your Itaú bank and card statements in `.xls` or `.xlsx` format. Card billing months are detected automatically. Review the reporting period, suggestions, and warnings before confirming; use **Set a card month manually** only when detection is missing or incorrect.
-2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Correct the transaction type and scope when necessary.
+2. In **Transactions**, choose a category from the selector and complete the description. The date, original description, amount, installments, and source are already filled in. Use the last-column checkbox for work expenses and reimbursements.
 3. In **Medium-term plan**, open **Plan settings** below the reserve chart to enter your starting reserve, monthly income, and planning horizon. Add planned expenses, edit monthly amounts, and follow the charts.
 4. In **Data and cloud**, export a backup or configure the Google Drive connection.
 
@@ -36,7 +36,7 @@ Categories already present in your data are added to the catalog automatically. 
 
 Planning uses expense names, a repeating monthly amount, and editable amounts for individual months. Categories apply to actual transactions.
 
-New imports can prefill a category and description from unambiguous reviewed expenses with the same normalized merchant text, source, account, and scope. Conflicting, archived, or unknown categories prevent learning; transaction types, amounts, and work scope are never inferred. Review the prefilled fields before confirming. For existing expenses, **Apply to N similar** explicitly assigns the selected category to matching uncategorized expenses without overwriting reviewed categories or changing scope.
+New imports can prefill a category and description from unambiguous reviewed expenses with the same normalized merchant text, source, account, and scope. Conflicting, archived, or unknown categories prevent learning. Merchant learning leaves transaction types and amounts unchanged and never infers work scope. Review the prefilled fields before confirming. For existing expenses, **Apply to N similar** explicitly assigns the selected category to matching uncategorized expenses without overwriting reviewed categories or changing scope.
 
 ## Understanding your month
 
@@ -95,7 +95,7 @@ A fresh start has its own saved identity. Backups and Drive sync preserve it, so
 
 The overview's income, expenses, net income, and category charts cover personal transactions. A separate **Work in / out** card shows work credits (reimbursements and refunds) and debits for the selected month. Its review link opens the work transaction filter. Monthly work cash flow is not an outstanding reimbursement balance: an expense and its reimbursement may occur in different months.
 
-New imports and manual entries start as **Personal**. Check the box in the last transaction column to mark work expenses or reimbursements; uncheck it to count the transaction as personal. The column uses your saved work label. The same checkbox is available when adding a manual transaction. For a reimbursement, check Work and choose the income type; the interface labels it **Reimbursement**. Leave salary unchecked. Work transfers and deleted records are excluded from both sets of totals. Personal transactions without categories appear in a small review banner above the overview cards.
+New imports and manual entries start as **Personal**. Check the box in the last transaction column to mark work expenses or reimbursements; uncheck it to count the transaction as personal. The column uses your saved work label. The same checkbox is available when adding a manual transaction. A positive income entry checked as work is labeled **Reimbursement**. Leave salary unchecked. Work account movements and deleted records are excluded from both sets of totals. Personal transactions without categories appear in a small review banner above the overview cards.
 
 In **Data and cloud**, customize the work label and optionally select category rules for older expense records without a saved personal or work choice, including archived categories. New imports are explicitly personal before category learning, so categories cannot silently mark a new transaction as work. Existing imported classifications remain visible and are preserved when a statement is uploaded again. Employer names and income descriptions never classify a deposit as a reimbursement. A saved personal or work choice takes priority over category rules. The work label, rules, and individual scopes are private financial data and are saved with backups and Drive synchronization. Older backups preserve the current work configuration when merged.
 
@@ -105,8 +105,9 @@ Work cash flow is separate from the independent medium-term plan; review planned
 
 Displayed numbers use Brazilian separators: `1.234,56` for decimals and `1.234.567,89` for currency amounts. Money fields show two decimal places and normalize after Enter or blur; percentage fields accept comma decimals such as `0,5`. Stored values, imports, and JSON backups keep their numeric representation.
 
-- Transactions use integer cents and signed amounts: debits are negative and credits are positive. Card refunds reduce spending.
-- Identifiable credit card bill payments, investments, and principal withdrawals are transfers. They are excluded from spending and income. Identified investment earnings count as income. You can correct this classification in the preview or transaction list.
+- Transactions use integer cents and signed amounts: debits are negative and credits are positive. Ordinary bank entries derive expense or income from the sign. **Manual transaction** also takes signed amounts: enter `-150,00` for an expense or `150,00` for income. Zero cannot be saved. There is no Type selector; a read-only label under the amount explains how the row is counted.
+- Card refunds reduce spending and are labeled **Refund**, rather than counting as new income. Existing refund and income-reversal classifications remain unchanged.
+- Recognized credit card bill payments and investment principal appear as **Account movement** and are excluded from spending and income to avoid counting the same money twice. Use **Exclude** before importing, or the delete button in Transactions, to remove movements you do not want to keep. Identified investment earnings count as income. Existing records and backups retain their classifications.
 - A card purchase belongs to its billing month. Its original purchase date is preserved. Future installments **are not created automatically**: import subsequent bills or add the commitment to your plan.
 - Planning is independent of actual transactions. Importing a statement does not automatically change your forecast.
 - Closing reserve = opening reserve + planned income − spending expenses + expected return on a positive opening reserve. Negative reserves earn no investment return; debt interest is not modeled. The closing balance becomes the next month's opening balance. Contributions are internal targets because moving money into a reserve does not reduce total assets. They are not subtracted or added again.

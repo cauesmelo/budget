@@ -126,7 +126,7 @@ function parseBank(rows: Rows, filename: string): ImportResult | null {
   }
   if (skipped) result.warnings.push(`${formatNumber(skipped)} row(s) with a date and transaction but no valid amount were skipped.`);
   if (exportedDate && result.transactions.some(t => t.date > exportedDate)) result.warnings.push('The statement contains transactions dated after the file was updated. They were preserved; check whether they are scheduled transactions or bank processing dates.');
-  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Identifiable card payments, investments, and withdrawals were marked as transfers to avoid duplicate expenses or income. Review their transaction types.');
+  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Recognized card payments and investment principal appear as account movements, excluded from income and spending. Use Exclude to remove any rows you do not want to import.');
   result.summary = `${formatNumber(result.transactions.length)} checking account transactions. Balances and totals were ignored.`;
   return result;
 }
@@ -203,7 +203,7 @@ function parseCard(rows: Rows, sheetName: string, filename: string, options: Imp
   if (skipped) result.warnings.push(`${formatNumber(skipped)} dated transaction(s) without a valid amount were skipped.`);
   result.warnings.push('The date is the original purchase date; the budget month is the statement month. Older installment purchases were not recorded again in the purchase month.');
   if (metadata.open) result.warnings.push('This statement is still open. Recent purchases and installments may change before closing; review changed amounts when importing an updated version.');
-  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Statement payments were marked as transfers and are excluded from expenses and income.');
+  if (result.transactions.some(t => t.kind === 'transfer')) result.warnings.push('Statement payments appear as account movements, excluded from income and spending. Use Exclude to remove them before importing.');
   result.summary = `${formatNumber(result.transactions.length)} card transactions for budget month ${month}.`;
   return result;
 }
