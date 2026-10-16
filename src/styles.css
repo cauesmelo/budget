@@ -26,6 +26,7 @@
 .original small{display:block;font-size:11px;margin-top:3px}
 .tx-table .category-needed{display:flex;align-items:center;gap:5px;color:#7a4c0a;font-weight:600;line-height:1.5}
 .category-needed svg{flex-shrink:0}
+.transaction-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
 .tx-table input{padding:9px;background:var(--surface);border:1px solid var(--control-border);border-radius:5px;font-size:12px;min-width:155px;width:100%;max-width:230px}
 input::placeholder,.tx-table input::placeholder{color:var(--muted);opacity:1}
 .tx-table input:hover,.plan-table input:hover{border-color:#59795b}
